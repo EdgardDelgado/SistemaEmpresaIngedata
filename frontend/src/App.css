@@ -1615,3 +1615,20 @@ footer h4 {
         padding-top: 55px;
     }
 }
+.loading-products {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+    color: var(--muted);
+    font-family: "Montserrat";
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+}
+
+.error-products {
+    color: #c0455b;
+    background: #fff8f8;
+    border-color: #ffd3d3;
+}

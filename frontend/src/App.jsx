@@ -1,5 +1,7 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+
+const API_PRODUCTOS = "/api/productos";
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
@@ -22,7 +24,13 @@ function img(nombre) {
 }
 
 function ImagenRecurso({ imagenes, alt, className }) {
-    const lista = Array.isArray(imagenes) ? imagenes : [imagenes];
+    const lista =
+        Array.isArray(imagenes) && imagenes.length > 0
+            ? imagenes
+            : imagenes
+                ? [imagenes]
+                : [FALLBACK_LOGO];
+
     const rutas = [...lista, FALLBACK_LOGO];
     const [index, setIndex] = useState(0);
 
@@ -40,395 +48,6 @@ function ImagenRecurso({ imagenes, alt, className }) {
     );
 }
 
-const productos = [
-    {
-        id: 1,
-        cat: "Red y datos",
-        brand: "Panduit",
-        nombre: "Cable UTP Cat 6 Panduit",
-        precio: 389.0,
-        rate: 4.9,
-        rev: 124,
-        tag: "Más vendido",
-        imagenes: [img("cable utp 6 panduit.jpg")],
-    },
-    {
-        id: 2,
-        cat: "Red y datos",
-        brand: "CommScope",
-        nombre: "Cable UTP Cat 6 CommScope",
-        precio: 389.0,
-        rate: 4.8,
-        rev: 80,
-        imagenes: [img("cable utp 6 commscope.jpg")],
-    },
-    {
-        id: 3,
-        cat: "Red y datos",
-        brand: "Panduit",
-        nombre: "Cable UTP Cat 6A Panduit",
-        precio: 520.0,
-        rate: 4.9,
-        rev: 62,
-        tag: "Nuevo",
-        imagenes: [img("cable utp 6a panduit.jpg")],
-    },
-    {
-        id: 4,
-        cat: "Red y datos",
-        brand: "CommScope",
-        nombre: "Cable UTP Cat 6A CommScope",
-        precio: 540.0,
-        rate: 4.8,
-        rev: 41,
-        imagenes: [img("cable utp 6a commscope.jpg")],
-    },
-    {
-        id: 5,
-        cat: "Red y datos",
-        brand: "Panduit",
-        nombre: "Jack RJ45 Cat 6",
-        precio: 168.0,
-        rate: 4.6,
-        rev: 33,
-        imagenes: [img("jack 6.jpg")],
-    },
-    {
-        id: 6,
-        cat: "Red y datos",
-        brand: "Panduit",
-        nombre: "Jack RJ45 Cat 6A",
-        precio: 198.0,
-        rate: 4.8,
-        rev: 35,
-        imagenes: [img("jack 6a.jpg")],
-    },
-    {
-        id: 7,
-        cat: "Red y datos",
-        brand: "Genérico",
-        nombre: "Face Plate",
-        precio: 12.0,
-        rate: 4.5,
-        rev: 23,
-        imagenes: [img("face plate.jpg")],
-    },
-    {
-        id: 8,
-        cat: "Red y datos",
-        brand: "Genérico",
-        nombre: "Tapa ciega data",
-        precio: 8.0,
-        rate: 4.5,
-        rev: 20,
-        imagenes: [img("tapa ciega data.jpg")],
-    },
-    {
-        id: 9,
-        cat: "Red y datos",
-        brand: "Genérico",
-        nombre: "Patch Cord RJ45",
-        precio: 25.0,
-        rate: 4.7,
-        rev: 58,
-        imagenes: [
-            img("pascord.jpg"),
-            img("pashcord.jpg"),
-            img("patchcord.jpg"),
-            img("Patch Cord RJ45.jpg"),
-        ],
-    },
-    {
-        id: 10,
-        cat: "Red y datos",
-        brand: "Siemon",
-        nombre: "Patch Panel 24 puertos",
-        precio: 245.0,
-        rate: 4.8,
-        rev: 41,
-        imagenes: [
-            img("Patch-Panel 24 partes.webp"),
-            img("Patch-Panel 24 puertos.webp"),
-            img("Patch Panel 24 puertos.webp"),
-        ],
-    },
-    {
-        id: 11,
-        cat: "Red y datos",
-        brand: "Genérico",
-        nombre: 'Gabinete rack 19" 12U de pared',
-        precio: 720.0,
-        rate: 4.8,
-        rev: 21,
-        tag: "Nuevo",
-        imagenes: [
-            img("Gabinete rack 19 pulgada 12U de pared.webp"),
-            img("Gabinete rack 19 pulgadas 12U de pared.webp"),
-            img("Gabinete rack 19 pulgadas 12U de pared.jpg"),
-        ],
-    },
-    {
-        id: 12,
-        cat: "Fibra óptica",
-        brand: "CommScope",
-        nombre: "Fibra óptica monomodo 12 hilos por metro",
-        precio: 6.5,
-        rate: 4.8,
-        rev: 72,
-        imagenes: [img("Fibra óptica monomodo 12 hilos por metro.png")],
-    },
-    {
-        id: 13,
-        cat: "Fibra óptica",
-        brand: "Siemon",
-        nombre: "Bandeja de empalme 24 puertos",
-        precio: 430.0,
-        rate: 4.7,
-        rev: 26,
-        imagenes: [img("bandeja de empalme 24 puertos.jpg")],
-    },
-    {
-        id: 14,
-        cat: "Fibra óptica",
-        brand: "Panduit",
-        nombre: "Patch Cord fibra LC-LC dúplex 3 m",
-        precio: 48.0,
-        rate: 4.9,
-        rev: 64,
-        imagenes: [
-            img("Patch Cord fibra LC-LC dúplex 3 m.jpg"),
-            img("Patch Cord fibra LC-LC duplex 3 m.jpg"),
-            img("Patch Cord fibra LC-LC dúplex 3m.jpg"),
-        ],
-    },
-    {
-        id: 15,
-        cat: "Fibra óptica",
-        brand: "Genérico",
-        nombre: "Pigtail LC OM3 pack x12",
-        precio: 96.0,
-        rate: 4.5,
-        rev: 18,
-        imagenes: [img("Pigtail LC OM3 pack x12.jpg")],
-    },
-    {
-        id: 16,
-        cat: "Eléctricos",
-        brand: "Indeco",
-        nombre: "Cable eléctrico Indeco",
-        precio: 185.0,
-        rate: 4.8,
-        rev: 97,
-        tag: "Oferta",
-        imagenes: [img("cable electrico indeco.jpg")],
-    },
-    {
-        id: 17,
-        cat: "Eléctricos",
-        brand: "Indeco",
-        nombre: "Cable eléctrico amarillo Indeco",
-        precio: 185.0,
-        rate: 4.7,
-        rev: 44,
-        imagenes: [img("cable electrico amarillo indeco.jpg")],
-    },
-    {
-        id: 18,
-        cat: "Eléctricos",
-        brand: "Indeco",
-        nombre: "Cable eléctrico blanco Indeco",
-        precio: 185.0,
-        rate: 4.7,
-        rev: 44,
-        imagenes: [img("cable electrico blanco indeco.jpg")],
-    },
-    {
-        id: 19,
-        cat: "Eléctricos",
-        brand: "Schneider",
-        nombre: "Interruptor termomagnético 2x32A",
-        precio: 78.5,
-        rate: 4.9,
-        rev: 53,
-        imagenes: [
-            img("Interruptor termomagnético 2x32A.webp"),
-            img("Interruptor termomagnetico 2x32A.webp"),
-            img("Interruptor termomagnético 2x32A.jpg"),
-        ],
-    },
-    {
-        id: 20,
-        cat: "Eléctricos",
-        brand: "Bticino",
-        nombre: "Tablero de distribución 12 polos",
-        precio: 142.0,
-        rate: 4.7,
-        rev: 38,
-        imagenes: [img("Tablero de distribución 12 polos.png")],
-    },
-    {
-        id: 21,
-        cat: "Eléctricos",
-        brand: "Steck",
-        nombre: "Tomacorriente industrial 32A",
-        precio: 39.9,
-        rate: 4.6,
-        rev: 22,
-        imagenes: [img("Tomacorriente industrial 32A.jpg")],
-    },
-    {
-        id: 22,
-        cat: "Eléctricos",
-        brand: "Bticino",
-        nombre: "Tomas comerciales",
-        precio: 18.0,
-        rate: 4.7,
-        rev: 31,
-        imagenes: [img("tomas comerciales.jpg")],
-    },
-    {
-        id: 23,
-        cat: "Eléctricos",
-        brand: "Bticino",
-        nombre: "Tomas estabilizadas",
-        precio: 22.0,
-        rate: 4.8,
-        rev: 34,
-        imagenes: [img("tomas estabilizadas.jpg")],
-    },
-    {
-        id: 24,
-        cat: "Eléctricos",
-        brand: "Genérico",
-        nombre: "Tubería EMT",
-        precio: 210.0,
-        rate: 4.5,
-        rev: 15,
-        imagenes: [img("Tubería EMT.jpg")],
-    },
-    {
-        id: 25,
-        cat: "Eléctricos",
-        brand: "Genérico",
-        nombre: "Kit pozo a tierra varilla + dosis química",
-        precio: 560.0,
-        rate: 4.9,
-        rev: 44,
-        tag: "Kit",
-        imagenes: [img("Kit pozo a tierra varilla + dosis química.png")],
-    },
-    {
-        id: 26,
-        cat: "Energía",
-        brand: "APC",
-        nombre: "UPS APC 1500VA línea interactiva",
-        precio: 1290.0,
-        rate: 4.9,
-        rev: 156,
-        tag: "Más vendido",
-        imagenes: [img("UPS APC 1500VA línea interactiva.jpg")],
-    },
-    {
-        id: 27,
-        cat: "Energía",
-        brand: "APC",
-        nombre: "UPS On-line 3000VA rack",
-        precio: 4350.0,
-        rate: 4.8,
-        rev: 31,
-        imagenes: [img("UPS On-line 3000VA rack.jpg")],
-    },
-    {
-        id: 28,
-        cat: "Energía",
-        brand: "Schneider",
-        nombre: "Transformador de aislamiento 5 kVA",
-        precio: 2980.0,
-        rate: 4.7,
-        rev: 12,
-        imagenes: [img("Transformador de aislamiento 5 kVA.jpg")],
-    },
-    {
-        id: 29,
-        cat: "Energía",
-        brand: "Genérico",
-        nombre: "Grupo electrógeno 6.5 kW a gasolina",
-        precio: 3890.0,
-        rate: 4.6,
-        rev: 21,
-        tag: "Nuevo",
-        imagenes: [img("Grupo electrógeno 6.5 kW a gasolina.jpg")],
-    },
-    {
-        id: 30,
-        cat: "Energía",
-        brand: "APC",
-        nombre: "Banco de baterías externo para UPS",
-        precio: 1150.0,
-        rate: 4.8,
-        rev: 27,
-        imagenes: [img("Banco de baterías externo para UPS.jpg")],
-    },
-    {
-        id: 31,
-        cat: "Servicios",
-        brand: "INGEDATA",
-        nombre: "Certificación de cableado con FLUKE DSX-5000 por punto",
-        precio: 35.0,
-        rate: 5.0,
-        rev: 88,
-        tag: "Servicio",
-        imagenes: [
-            img("Certificación de cableado con FLUKE DSX-5000 por punto.jpg"),
-            img("Certificación de cableado con FLUKE DSX-500 por punto.jpg"),
-        ],
-    },
-    {
-        id: 32,
-        cat: "Servicios",
-        brand: "INGEDATA",
-        nombre: "Instalación de pozo a tierra incluye medición",
-        precio: 1450.0,
-        rate: 4.9,
-        rev: 46,
-        tag: "Servicio",
-        imagenes: [img("Instalación de pozo a tierra incluye medición.jpg")],
-    },
-    {
-        id: 33,
-        cat: "Servicios",
-        brand: "INGEDATA",
-        nombre: "Instalación y configuración de CCTV por cámara",
-        precio: 180.0,
-        rate: 4.8,
-        rev: 52,
-        tag: "Servicio",
-        imagenes: [img("Instalación y configuración de CCTV por cámara.jpg")],
-    },
-    {
-        id: 34,
-        cat: "Servicios",
-        brand: "INGEDATA",
-        nombre: "Mantenimiento preventivo de UPS",
-        precio: 320.0,
-        rate: 4.9,
-        rev: 34,
-        tag: "Servicio",
-        imagenes: [img("Mantenimiento preventivo de UPS.png")],
-    },
-    {
-        id: 35,
-        cat: "Servicios",
-        brand: "INGEDATA",
-        nombre: "Fabricación de mobiliario en melamina por m²",
-        precio: 260.0,
-        rate: 4.8,
-        rev: 29,
-        tag: "Servicio",
-        imagenes: [img("Fabricación de mobiliario en melamina por m².png")],
-    },
-];
-
 const categorias = [
     "Todos",
     "Red y datos",
@@ -439,6 +58,10 @@ const categorias = [
 ];
 
 function App() {
+    const [productos, setProductos] = useState([]);
+    const [cargandoProductos, setCargandoProductos] = useState(true);
+    const [errorProductos, setErrorProductos] = useState("");
+
     const [categoria, setCategoria] = useState("Todos");
     const [buscar, setBuscar] = useState("");
     const [orden, setOrden] = useState("default");
@@ -448,36 +71,82 @@ function App() {
     const [toast, setToast] = useState("");
     const [pagoActivo, setPagoActivo] = useState("tarjeta");
 
+    useEffect(() => {
+        async function cargarProductos() {
+            try {
+                setCargandoProductos(true);
+                setErrorProductos("");
+
+                const respuesta = await fetch(API_PRODUCTOS);
+
+                if (!respuesta.ok) {
+                    throw new Error("No se pudo conectar con el backend");
+                }
+
+                const data = await respuesta.json();
+
+                if (!Array.isArray(data)) {
+                    throw new Error("La respuesta del backend no es una lista de productos");
+                }
+
+                setProductos(data);
+            } catch (error) {
+                console.error("Error al cargar productos:", error);
+                setErrorProductos(
+                    "No se pudieron cargar los productos desde la base de datos."
+                );
+            } finally {
+                setCargandoProductos(false);
+            }
+        }
+
+        cargarProductos();
+    }, []);
+
     const lista = useMemo(() => {
         let data = productos.filter((p) => {
             const okCategoria = categoria === "Todos" || p.cat === categoria;
-            const texto = `${p.nombre} ${p.brand} ${p.cat}`.toLowerCase();
+            const texto = `${p.nombre || ""} ${p.brand || ""} ${p.cat || ""}`.toLowerCase();
             const okBuscar = texto.includes(buscar.toLowerCase().trim());
             return okCategoria && okBuscar;
         });
 
-        if (orden === "asc") data = [...data].sort((a, b) => a.precio - b.precio);
-        if (orden === "desc") data = [...data].sort((a, b) => b.precio - a.precio);
-        if (orden === "az")
-            data = [...data].sort((a, b) => a.nombre.localeCompare(b.nombre));
+        if (orden === "asc") {
+            data = [...data].sort((a, b) => Number(a.precio) - Number(b.precio));
+        }
+
+        if (orden === "desc") {
+            data = [...data].sort((a, b) => Number(b.precio) - Number(a.precio));
+        }
+
+        if (orden === "az") {
+            data = [...data].sort((a, b) =>
+                String(a.nombre || "").localeCompare(String(b.nombre || ""))
+            );
+        }
 
         return data;
-    }, [categoria, buscar, orden]);
+    }, [productos, categoria, buscar, orden]);
 
     const itemsCarrito = Object.entries(carrito)
         .map(([id, cantidad]) => {
-            const producto = productos.find((p) => p.id === Number(id));
-            return { ...producto, cantidad };
+            const producto = productos.find((p) => Number(p.id) === Number(id));
+            return producto ? { ...producto, cantidad } : null;
         })
-        .filter((item) => item.id);
+        .filter(Boolean);
 
     const subtotal = itemsCarrito.reduce(
-        (acc, item) => acc + item.precio * item.cantidad,
+        (acc, item) => acc + Number(item.precio || 0) * item.cantidad,
         0
     );
+
     const igv = subtotal * 0.18;
     const total = subtotal + igv;
-    const cantidadTotal = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
+
+    const cantidadTotal = itemsCarrito.reduce(
+        (acc, item) => acc + item.cantidad,
+        0
+    );
 
     const textoCotizacion =
         itemsCarrito.length === 0
@@ -486,12 +155,14 @@ function App() {
                 .map(
                     (item) =>
                         `- ${item.nombre} x${item.cantidad} | S/ ${(
-                            item.precio * item.cantidad
+                            Number(item.precio || 0) * item.cantidad
                         ).toFixed(2)}`
                 )
-                .join("\n")}\n\nSubtotal: S/ ${subtotal.toFixed(2)}\nIGV: S/ ${igv.toFixed(
+                .join("\n")}\n\nSubtotal: S/ ${subtotal.toFixed(
                     2
-                )}\nTotal referencial: S/ ${total.toFixed(2)}`;
+                )}\nIGV: S/ ${igv.toFixed(2)}\nTotal referencial: S/ ${total.toFixed(
+                    2
+                )}`;
 
     const whatsappCotizacion = `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(
         textoCotizacion
@@ -567,6 +238,7 @@ function App() {
                                 alt="Logo INGEDATA"
                             />
                         </span>
+
                         <span className="txt">
                             <span className="name">
                                 INGE<b>DATA</b>
@@ -588,6 +260,7 @@ function App() {
                         <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
                             🛒 Carrito <span className="badge">{cantidadTotal}</span>
                         </button>
+
                         <a
                             href={whatsappCotizacion}
                             target="_blank"
@@ -615,10 +288,12 @@ function App() {
                 <div className="wrap">
                     <div>
                         <span className="eyebrow">Soluciones Integrales</span>
+
                         <h1>
                             Soluciones integrales en <em>telecomunicaciones, energía</em> e
                             infraestructura tecnológica
                         </h1>
+
                         <p>
                             Brindamos servicios de alta calidad en redes de datos, fibra óptica,
                             sistemas eléctricos, seguridad electrónica, climatización y más.
@@ -634,6 +309,7 @@ function App() {
                             >
                                 Solicitar cotización ✈
                             </a>
+
                             <a href="#servicios" className="btn-ghost">
                                 Ver servicios ▸
                             </a>
@@ -697,14 +373,17 @@ function App() {
                         <div>
                             <div className="ey">¿Quiénes somos?</div>
                             <h3>INGEDATA S.A.C.</h3>
+
                             <p>
-                                Empresa peruana especializada en soluciones integrales de infraestructura
-                                tecnológica, telecomunicaciones y sistemas eléctricos.
+                                Empresa peruana especializada en soluciones integrales de
+                                infraestructura tecnológica, telecomunicaciones y sistemas
+                                eléctricos.
                             </p>
+
                             <p>
                                 Atendemos a empresas corporativas, campamentos mineros, plantas
-                                industriales, instituciones y organizaciones de diversos sectores, brindando
-                                soluciones confiables, seguras y eficientes.
+                                industriales, instituciones y organizaciones de diversos sectores,
+                                brindando soluciones confiables, seguras y eficientes.
                             </p>
 
                             <div className="pills">
@@ -878,64 +557,80 @@ function App() {
                     </div>
 
                     <div className="count">
-                        {lista.length} producto{lista.length !== 1 ? "s" : ""}
+                        {cargandoProductos
+                            ? "Cargando productos..."
+                            : `${lista.length} producto${lista.length !== 1 ? "s" : ""}`}
                     </div>
 
-                    <div className="grid">
-                        {lista.map((p) => (
-                            <article className="card in" key={p.id}>
-                                <div className="media">
-                                    <ImagenRecurso imagenes={p.imagenes} alt={p.nombre} />
+                    {cargandoProductos ? (
+                        <div className="loading-products">
+                            Cargando productos desde la base de datos...
+                        </div>
+                    ) : errorProductos ? (
+                        <div className="loading-products error-products">
+                            {errorProductos}
+                            <br />
+                            Verifica que el backend esté encendido en http://localhost:3000/productos
+                        </div>
+                    ) : (
+                        <div className="grid">
+                            {lista.map((p) => (
+                                <article className="card in" key={p.id}>
+                                    <div className="media">
+                                        <ImagenRecurso imagenes={p.imagenes} alt={p.nombre} />
 
-                                    <div className="chips">
-                                        {p.tag && (
-                                            <span
-                                                className={`chip ${p.tag === "Servicio"
-                                                        ? "svc"
-                                                        : p.tag === "Kit"
-                                                            ? "green"
-                                                            : "gold"
-                                                    }`}
-                                            >
-                                                {p.tag}
-                                            </span>
-                                        )}
-                                    </div>
+                                        <div className="chips">
+                                            {p.tag && (
+                                                <span
+                                                    className={`chip ${p.tag === "Servicio"
+                                                            ? "svc"
+                                                            : p.tag === "Kit"
+                                                                ? "green"
+                                                                : "gold"
+                                                        }`}
+                                                >
+                                                    {p.tag}
+                                                </span>
+                                            )}
+                                        </div>
 
-                                    <button
-                                        className={`fav ${favoritos[p.id] ? "on" : ""}`}
-                                        onClick={() => toggleFavorito(p.id)}
-                                    >
-                                        {favoritos[p.id] ? "♥" : "♡"}
-                                    </button>
+                                        <button
+                                            className={`fav ${favoritos[p.id] ? "on" : ""}`}
+                                            onClick={() => toggleFavorito(p.id)}
+                                        >
+                                            {favoritos[p.id] ? "♥" : "♡"}
+                                        </button>
 
-                                    <button className="quick" onClick={() => agregar(p.id)}>
-                                        Agregar al carrito
-                                    </button>
-                                </div>
-
-                                <div className="body">
-                                    <span className="brand">{p.brand}</span>
-                                    <h3>{p.nombre}</h3>
-
-                                    <div className="rate">
-                                        <span className="stars">★★★★★</span> {p.rate.toFixed(1)}{" "}
-                                        <span>({p.rev})</span>
-                                    </div>
-
-                                    <div className="priceRow">
-                                        <span className="price">
-                                            S/ {p.precio.toFixed(2)} <small>+IGV</small>
-                                        </span>
-
-                                        <button className="add" onClick={() => agregar(p.id)}>
-                                            +
+                                        <button className="quick" onClick={() => agregar(p.id)}>
+                                            Agregar al carrito
                                         </button>
                                     </div>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
+
+                                    <div className="body">
+                                        <span className="brand">{p.brand}</span>
+                                        <h3>{p.nombre}</h3>
+
+                                        <div className="rate">
+                                            <span className="stars">★★★★★</span>{" "}
+                                            {Number(p.rate || 0).toFixed(1)}{" "}
+                                            <span>({p.rev || 0})</span>
+                                        </div>
+
+                                        <div className="priceRow">
+                                            <span className="price">
+                                                S/ {Number(p.precio || 0).toFixed(2)}{" "}
+                                                <small>+IGV</small>
+                                            </span>
+
+                                            <button className="add" onClick={() => agregar(p.id)}>
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </section>
 
@@ -1333,7 +1028,9 @@ function App() {
 
                                 <div className="info">
                                     <h4>{item.nombre}</h4>
-                                    <div className="p">S/ {item.precio.toFixed(2)}</div>
+                                    <div className="p">
+                                        S/ {Number(item.precio || 0).toFixed(2)}
+                                    </div>
 
                                     <div className="qty">
                                         <button onClick={() => cambiarCantidad(item.id, -1)}>
