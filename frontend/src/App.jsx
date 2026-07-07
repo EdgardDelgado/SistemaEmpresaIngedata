@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_PRODUCTOS = "/api/productos";
+const API_PRODUCTOS = "https://ingedata-backend.onrender.com/productos";
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
