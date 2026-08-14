@@ -23,6 +23,202 @@ function img(nombre) {
     return `/imagenes/${nombre}`;
 }
 
+function normalizarTexto(valor = "") {
+    return String(valor)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/,/g, ".")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function obtenerImagenesProducto(producto) {
+    const nombre = normalizarTexto(producto?.nombre);
+
+    // Fibra óptica
+    if (nombre.includes("fibra optica monomodo")) {
+        return ["/imagenes/Fibra óptica monomodo 12 hilos por metro.png"];
+    }
+
+    if (nombre.includes("fibra optica multimodo")) {
+        // Imagen referencial hasta que se agregue una foto específica de multimodo.
+        return ["/imagenes/Fibra óptica monomodo 12 hilos por metro.png"];
+    }
+
+    // Cables NH-90
+    if (nombre.includes("nh-90") && nombre.includes("2.5 mm")) {
+        return ["/imagenes/cable electrico amarillo indeco.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("4 mm")) {
+        return ["/imagenes/cable electrico blanco indeco.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("6 mm")) {
+        return ["/imagenes/cable electrico indeco.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("10 mm")) {
+        return ["/imagenes/cable electrico 10mm.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("16 mm")) {
+        return ["/imagenes/16 NH-90mm indeco.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("25 mm")) {
+        return ["/imagenes/25mm nh-90 indeco.jpg"];
+    }
+
+    if (nombre.includes("nh-90") && nombre.includes("35 mm")) {
+        return ["/imagenes/35mm nh-90 indeco.jpg"];
+    }
+
+    // Cables N2XOH
+    // Usamos una imagen referencial N2XOH que está comprobado que existe
+    // en public/imagenes. Así evitamos que aparezca el logo de fallback.
+    if (nombre.includes("n2xoh")) {
+        return ["/imagenes/16mm N2XOH indeco.jpg"];
+    }
+
+    // Otros cables eléctricos existentes
+    if (nombre.includes("cable electrico amarillo")) {
+        return ["/imagenes/cable electrico amarillo indeco.jpg"];
+    }
+
+    if (nombre.includes("cable electrico blanco")) {
+        return ["/imagenes/cable electrico blanco indeco.jpg"];
+    }
+
+    if (nombre === "cable electrico indeco") {
+        return ["/imagenes/cable electrico indeco.jpg"];
+    }
+
+    // Tomas y accesorios eléctricos
+    if (nombre.includes("schuko")) {
+        return ["/imagenes/toma schuko.jpg"];
+    }
+
+    if (nombre.includes("industrial") && nombre.includes("32a")) {
+        return ["/imagenes/Tomacorriente industrial 32A.jpg"];
+    }
+
+    if (nombre.includes("tomas comerciales")) {
+        return ["/imagenes/tomas comerciales.jpg"];
+    }
+
+    if (nombre.includes("tomas estabilizadas")) {
+        return ["/imagenes/tomas estabilizadas.jpg"];
+    }
+
+    if (nombre.includes("interruptor termomagnetico")) {
+        return ["/imagenes/Interruptor termomagnético 2x32A.jpg"];
+    }
+
+    if (nombre.includes("tablero de distribucion")) {
+        return ["/imagenes/Tablero de distribución 12 polos.png"];
+    }
+
+    if (nombre.includes("tuberia emt")) {
+        return ["/imagenes/Tubería EMT.jpg"];
+    }
+
+    // Energía
+    if (nombre.includes("ups apc 1500va")) {
+        return ["/imagenes/UPS APC 1500VA línea interactiva.jpg"];
+    }
+
+    if (nombre.includes("ups on-line 3000va")) {
+        return ["/imagenes/UPS On-line 3000VA rack.jpg"];
+    }
+
+    if (nombre.includes("banco de baterias")) {
+        return ["/imagenes/Banco de baterías externo para UPS.jpg"];
+    }
+
+    if (nombre.includes("grupo electrogeno")) {
+        return ["/imagenes/Grupo electrógeno 6.5 kW a gasolina.jpg"];
+    }
+
+    if (nombre.includes("transformador de aislamiento")) {
+        return ["/imagenes/Transformador de aislamiento 5 kVA.jpg"];
+    }
+
+    // Melamina
+    if (nombre.includes("escritorios") && nombre.includes("estaciones")) {
+        return ["/imagenes/escritorio melamina.webp"];
+    }
+
+    if (nombre.includes("muebles de oficina")) {
+        return ["/imagenes/Fabricación de mobiliario en melamina por m².png"];
+    }
+
+    if (nombre.includes("gabinetes") && nombre.includes("almacenamiento")) {
+        return ["/imagenes/gabinetes de almacenamiento melamine.png"];
+    }
+
+    if (nombre.includes("recepcion")) {
+        return ["/imagenes/muebles de recepcion melamine.jpg"];
+    }
+
+    if (nombre.includes("kitchenette") || nombre.includes("mueble de cocina")) {
+        return ["/imagenes/mueble de cocina melamine.jpg"];
+    }
+
+    if (nombre.includes("mobiliario personalizado")) {
+        return ["/imagenes/mobiliario personalizado melamine.jpg"];
+    }
+
+    // Estructuras metálicas
+    if (nombre.includes("coberturas metalicas")) {
+        return ["/imagenes/coberturas metalicas.jpg"];
+    }
+
+    if (nombre.includes("escaleras metalicas")) {
+        return ["/imagenes/escaleras metalicas.jpg"];
+    }
+
+    if (nombre.includes("barandas metalicas")) {
+        return ["/imagenes/barandas metalicas.jpg"];
+    }
+
+    if (nombre.includes("mesas") && nombre.includes("metalicas")) {
+        return ["/imagenes/mesas metalicas.jpg"];
+    }
+
+    if (nombre.includes("estructuras metalicas personalizadas")) {
+        return ["/imagenes/estructuras metalicas personalizadas.jpg"];
+    }
+
+    // Servicios de fibra óptica
+    if (nombre.includes("fibra optica") && nombre.includes("planta interna")) {
+        return ["/imagenes/cableado fibra optica parte interna.png"];
+    }
+
+    if (nombre.includes("fibra optica") && nombre.includes("planta externa")) {
+        return [
+            "/imagenes/cableado fibra optica parte externa .png",
+            "/imagenes/cableado fibra optica parte externa.png",
+        ];
+    }
+
+    // Si no existe una regla especial, se usa lo que entrega el backend.
+    if (Array.isArray(producto?.imagenes) && producto.imagenes.length > 0) {
+        return producto.imagenes;
+    }
+
+    if (producto?.imagenes) {
+        return [producto.imagenes];
+    }
+
+    if (producto?.imagen) {
+        return [producto.imagen];
+    }
+
+    return [FALLBACK_LOGO];
+}
+
 function ImagenRecurso({ imagenes, alt, className }) {
     const lista =
         Array.isArray(imagenes) && imagenes.length > 0
@@ -31,8 +227,12 @@ function ImagenRecurso({ imagenes, alt, className }) {
                 ? [imagenes]
                 : [FALLBACK_LOGO];
 
-    const rutas = [...lista, FALLBACK_LOGO];
+    const rutas = [...new Set([...lista, FALLBACK_LOGO])];
     const [index, setIndex] = useState(0);
+
+    useEffect(() => {
+        setIndex(0);
+    }, [JSON.stringify(lista)]);
 
     return (
         <img
@@ -40,21 +240,23 @@ function ImagenRecurso({ imagenes, alt, className }) {
             alt={alt}
             className={className}
             onError={() => {
-                if (index < rutas.length - 1) {
-                    setIndex(index + 1);
-                }
+                setIndex((actual) =>
+                    actual < rutas.length - 1 ? actual + 1 : actual
+                );
             }}
         />
     );
 }
 
 const categorias = [
-    "Todos",
-    "Red y datos",
-    "Fibra óptica",
-    "Eléctricos",
-    "Energía",
-    "Servicios",
+    { label: "Todos", value: "Todos" },
+    { label: "Productos de cableado estructurado", value: "Red y datos" },
+    { label: "Fibra óptica", value: "Fibra óptica" },
+    { label: "Productos eléctricos", value: "Eléctricos" },
+    { label: "Equipos de alimentación ininterrumpida", value: "Energía" },
+    { label: "Fabricación e instalación de muebles en melamina", value: "Melamina" },
+    { label: "Estructuras metálicas", value: "Estructuras metálicas" },
+    { label: "Servicios", value: "Servicios" },
 ];
 
 function App() {
@@ -210,8 +412,21 @@ function App() {
         mostrarToast(favoritos[id] ? "Quitado de favoritos" : "Añadido a favoritos");
     };
 
+    const cotizarProducto = (producto) => {
+        const mensaje = `Hola, deseo solicitar una cotización del siguiente producto o servicio de INGEDATA:
+
+Producto/Servicio: ${producto.nombre}
+Categoría: ${producto.cat}
+Marca: ${producto.brand || "INGEDATA"}
+
+Por favor, indíqueme disponibilidad, precio y condiciones.`;
+
+        const url = `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+    };
+
     return (
-    <>
+        <>
             <div className="topbar">
                 <div className="wrap">
                     <div>
@@ -547,11 +762,11 @@ function App() {
                     <div className="filters">
                         {categorias.map((cat) => (
                             <button
-                                key={cat}
-                                className={categoria === cat ? "active" : ""}
-                                onClick={() => setCategoria(cat)}
+                                key={cat.value}
+                                className={categoria === cat.value ? "active" : ""}
+                                onClick={() => setCategoria(cat.value)}
                             >
-                                {cat}
+                                {cat.label}
                             </button>
                         ))}
                     </div>
@@ -574,61 +789,99 @@ function App() {
                         </div>
                     ) : (
                         <div className="grid">
-                            {lista.map((p) => (
-                                <article className="card in" key={p.id}>
-                                    <div className="media">
-                                        <ImagenRecurso imagenes={p.imagenes} alt={p.nombre} />
+                            {lista.map((p) => {
+                                const requiereCotizacion = p.tag === "Cotizar";
 
-                                        <div className="chips">
-                                            {p.tag && (
-                                                <span
-                                                    className={`chip ${p.tag === "Servicio"
-                                                            ? "svc"
-                                                            : p.tag === "Kit"
-                                                                ? "green"
-                                                                : "gold"
-                                                        }`}
+                                return (
+                                    <article className="card in" key={p.id}>
+                                        <div className="media">
+                                            <ImagenRecurso imagenes={obtenerImagenesProducto(p)} alt={p.nombre} />
+
+                                            <div className="chips">
+                                                {p.tag && (
+                                                    <span
+                                                        className={`chip ${p.tag === "Servicio" ||
+                                                                p.tag === "Cotizar"
+                                                                ? "svc"
+                                                                : p.tag === "Kit"
+                                                                    ? "green"
+                                                                    : "gold"
+                                                            }`}
+                                                    >
+                                                        {p.tag}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <button
+                                                className={`fav ${favoritos[p.id] ? "on" : ""}`}
+                                                onClick={() => toggleFavorito(p.id)}
+                                            >
+                                                {favoritos[p.id] ? "♥" : "♡"}
+                                            </button>
+
+                                            {requiereCotizacion ? (
+                                                <button
+                                                    className="quick quote-product"
+                                                    onClick={() => cotizarProducto(p)}
                                                 >
-                                                    {p.tag}
-                                                </span>
+                                                    Solicitar cotización
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="quick"
+                                                    onClick={() => agregar(p.id)}
+                                                >
+                                                    Agregar al carrito
+                                                </button>
                                             )}
                                         </div>
 
-                                        <button
-                                            className={`fav ${favoritos[p.id] ? "on" : ""}`}
-                                            onClick={() => toggleFavorito(p.id)}
-                                        >
-                                            {favoritos[p.id] ? "♥" : "♡"}
-                                        </button>
+                                        <div className="body">
+                                            <span className="brand">{p.brand}</span>
+                                            <h3>{p.nombre}</h3>
 
-                                        <button className="quick" onClick={() => agregar(p.id)}>
-                                            Agregar al carrito
-                                        </button>
-                                    </div>
+                                            <div className="rate">
+                                                <span className="stars">★★★★★</span>{" "}
+                                                {Number(p.rate || 0).toFixed(1)}{" "}
+                                                <span>({p.rev || 0})</span>
+                                            </div>
 
-                                    <div className="body">
-                                        <span className="brand">{p.brand}</span>
-                                        <h3>{p.nombre}</h3>
+                                            <div className="priceRow">
+                                                {requiereCotizacion ? (
+                                                    <>
+                                                        <span className="price quote-price">
+                                                            Precio a cotizar
+                                                        </span>
 
-                                        <div className="rate">
-                                            <span className="stars">★★★★★</span>{" "}
-                                            {Number(p.rate || 0).toFixed(1)}{" "}
-                                            <span>({p.rev || 0})</span>
+                                                        <button
+                                                            className="add quote-add"
+                                                            onClick={() => cotizarProducto(p)}
+                                                            title="Solicitar cotización por WhatsApp"
+                                                        >
+                                                            💬
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="price">
+                                                            S/ {Number(p.precio || 0).toFixed(2)}{" "}
+                                                            <small>+IGV</small>
+                                                        </span>
+
+                                                        <button
+                                                            className="add"
+                                                            onClick={() => agregar(p.id)}
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-
-                                        <div className="priceRow">
-                                            <span className="price">
-                                                S/ {Number(p.precio || 0).toFixed(2)}{" "}
-                                                <small>+IGV</small>
-                                            </span>
-
-                                            <button className="add" onClick={() => agregar(p.id)}>
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </article>
-                            ))}
+                                    </article>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1024,7 +1277,7 @@ function App() {
                     ) : (
                         itemsCarrito.map((item) => (
                             <div className="ci" key={item.id}>
-                                <ImagenRecurso imagenes={item.imagenes} alt={item.nombre} />
+                                <ImagenRecurso imagenes={obtenerImagenesProducto(item)} alt={item.nombre} />
 
                                 <div className="info">
                                     <h4>{item.nombre}</h4>
