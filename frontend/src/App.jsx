@@ -5,16 +5,27 @@ const API_PRODUCTOS = "https://ingedata-backend.onrender.com/productos";
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
+const WHATSAPP_3 = "51934274601";
 
 const DATOS_EMPRESA = {
     telefono1: "986 916 557",
     telefono2: "986 913 711",
+    telefono3: "934 274 601",
     correo: "jdiego@ingedataa.com",
     correo2: "lpanduro@ingedataa.com",
+    correo3: "falbornoz@ingedataa.com",
     ruc: "20613136054",
     titular: "INGEDATA S.A.C.",
-    yape: "986 916 557",
-    plin: "986 913 711",
+};
+
+const DATOS_BANCARIOS = {
+    banco: "Interbank",
+    titular: "INGEDATA S.A.C.",
+    numeroCuenta: "200-3007318136",
+    cci: "00320000300731813631",
+    tipoCuenta: "Cuenta empresa",
+    moneda: "Soles (PEN)",
+    cuentaDetraccion: "00059194461",
 };
 
 const FALLBACK_LOGO = "/imagenes/logo ingedata.jpeg";
@@ -271,7 +282,15 @@ function App() {
     const [carritoAbierto, setCarritoAbierto] = useState(false);
     const [favoritos, setFavoritos] = useState({});
     const [toast, setToast] = useState("");
-    const [pagoActivo, setPagoActivo] = useState("tarjeta");
+    const [comprobante, setComprobante] = useState("boleta");
+    const [datosComprobante, setDatosComprobante] = useState({
+        dni: "",
+        nombres: "",
+        ruc: "",
+        razonSocial: "",
+        direccionFiscal: "",
+        correo: "",
+    });
 
     useEffect(() => {
         async function cargarProductos() {
@@ -423,6 +442,82 @@ Por favor, indíqueme disponibilidad, precio y condiciones.`;
 
         const url = `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(mensaje)}`;
         window.open(url, "_blank", "noopener,noreferrer");
+    };
+
+    const copiarTexto = async (texto, etiqueta) => {
+        try {
+            await navigator.clipboard.writeText(texto);
+            mostrarToast(`${etiqueta} copiado correctamente`);
+        } catch {
+            mostrarToast(`No se pudo copiar ${etiqueta.toLowerCase()}`);
+        }
+    };
+
+    const actualizarDatoComprobante = (campo, valor) => {
+        setDatosComprobante((prev) => ({
+            ...prev,
+            [campo]: valor,
+        }));
+    };
+
+    const solicitarComprobante = () => {
+        const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datosComprobante.correo.trim());
+
+        if (comprobante === "boleta") {
+            if (!/^\d{8}$/.test(datosComprobante.dni.trim())) {
+                mostrarToast("Ingresa un DNI válido de 8 dígitos");
+                return;
+            }
+
+            if (!datosComprobante.nombres.trim()) {
+                mostrarToast("Ingresa nombres y apellidos");
+                return;
+            }
+        } else {
+            if (!/^\d{11}$/.test(datosComprobante.ruc.trim())) {
+                mostrarToast("Ingresa un RUC válido de 11 dígitos");
+                return;
+            }
+
+            if (!datosComprobante.razonSocial.trim()) {
+                mostrarToast("Ingresa la razón social");
+                return;
+            }
+
+            if (!datosComprobante.direccionFiscal.trim()) {
+                mostrarToast("Ingresa la dirección fiscal");
+                return;
+            }
+        }
+
+        if (!correoValido) {
+            mostrarToast("Ingresa un correo electrónico válido");
+            return;
+        }
+
+        const mensaje =
+            comprobante === "boleta"
+                ? `Hola, deseo solicitar una BOLETA electrónica por mi compra o servicio con INGEDATA.
+
+DNI: ${datosComprobante.dni.trim()}
+Nombres y apellidos: ${datosComprobante.nombres.trim()}
+Correo: ${datosComprobante.correo.trim()}
+
+Por favor, confírmenme la emisión del comprobante.`
+                : `Hola, deseo solicitar una FACTURA electrónica por mi compra o servicio con INGEDATA.
+
+RUC: ${datosComprobante.ruc.trim()}
+Razón social: ${datosComprobante.razonSocial.trim()}
+Dirección fiscal: ${datosComprobante.direccionFiscal.trim()}
+Correo: ${datosComprobante.correo.trim()}
+
+Por favor, confírmenme la emisión del comprobante.`;
+
+        window.open(
+            `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(mensaje)}`,
+            "_blank",
+            "noopener,noreferrer"
+        );
     };
 
     return (
@@ -935,218 +1030,482 @@ Por favor, indíqueme disponibilidad, precio y condiciones.`;
 
             <section className="payments section" id="pagos">
                 <div className="wrap">
-                    <div className="section-head">
-                        <div className="ey">Métodos de pago</div>
+                    <div className="section-head payment-main-head">
+                        <div className="ey">Método de pago</div>
                         <h2>
-                            Pagos <b>rápidos y seguros</b>
+                            Transferencia <b>bancaria segura</b>
                         </h2>
                         <div className="uline"></div>
                         <p>
-                            Selecciona el método de pago que prefieras para cancelar tus
-                            servicios o productos.
+                            Realiza tu pago directamente a la cuenta empresarial de INGEDATA S.A.C.
+                            Verifica los datos antes de transferir y conserva tu constancia de pago.
                         </p>
                     </div>
 
-                    <div className="pay-tabs">
-                        <button
-                            className={pagoActivo === "tarjeta" ? "active" : ""}
-                            onClick={() => setPagoActivo("tarjeta")}
-                        >
-                            💳 Tarjeta
-                        </button>
+                    <div className="bank-payment-layout">
+                        <div className="bank-card-interactive">
+                            <div className="bank-card-top">
+                                <div>
+                                    <span className="bank-label">BANCO</span>
+                                    <h3>{DATOS_BANCARIOS.banco}</h3>
+                                </div>
+                                <div className="bank-currency">
+                                    <span>S/</span>
+                                    <small>{DATOS_BANCARIOS.moneda}</small>
+                                </div>
+                            </div>
 
-                        <button
-                            className={pagoActivo === "yape" ? "active" : ""}
-                            onClick={() => setPagoActivo("yape")}
-                        >
-                            📱 Yape
-                        </button>
+                            <div className="bank-owner">
+                                <span>Titular</span>
+                                <strong>{DATOS_BANCARIOS.titular}</strong>
+                                <small>RUC {DATOS_EMPRESA.ruc}</small>
+                            </div>
 
-                        <button
-                            className={pagoActivo === "plin" ? "active" : ""}
-                            onClick={() => setPagoActivo("plin")}
-                        >
-                            📲 Plin
-                        </button>
+                            <div className="bank-number-block">
+                                <div className="bank-number-heading">
+                                    <span>Número de cuenta</span>
+                                    <button
+                                        type="button"
+                                        className="copy-mini"
+                                        onClick={() =>
+                                            copiarTexto(
+                                                DATOS_BANCARIOS.numeroCuenta,
+                                                "Número de cuenta"
+                                            )
+                                        }
+                                    >
+                                        📋 Copiar
+                                    </button>
+                                </div>
+                                <strong className="bank-number">
+                                    {DATOS_BANCARIOS.numeroCuenta}
+                                </strong>
+                            </div>
 
-                        <button
-                            className={pagoActivo === "transferencia" ? "active" : ""}
-                            onClick={() => setPagoActivo("transferencia")}
-                        >
-                            🏦 Transferencia
-                        </button>
+                            <div className="bank-number-block cci-block">
+                                <div className="bank-number-heading">
+                                    <span>CCI</span>
+                                    <button
+                                        type="button"
+                                        className="copy-mini"
+                                        onClick={() =>
+                                            copiarTexto(DATOS_BANCARIOS.cci, "CCI")
+                                        }
+                                    >
+                                        📋 Copiar
+                                    </button>
+                                </div>
+                                <strong className="bank-number bank-number-small">
+                                    {DATOS_BANCARIOS.cci}
+                                </strong>
+                            </div>
+
+                            <div className="bank-meta">
+                                <div>
+                                    <span>Tipo de cuenta</span>
+                                    <b>{DATOS_BANCARIOS.tipoCuenta}</b>
+                                </div>
+                                <div>
+                                    <span>Moneda</span>
+                                    <b>{DATOS_BANCARIOS.moneda}</b>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="payment-actions-panel">
+                            <div className="payment-status">
+                                <span className="status-dot"></span>
+                                <div>
+                                    <b>Cuenta empresarial habilitada</b>
+                                    <small>Datos proporcionados por INGEDATA S.A.C.</small>
+                                </div>
+                            </div>
+
+                            <div className="payment-action-card">
+                                <span className="action-icon">🏦</span>
+                                <div>
+                                    <h4>Transferencia Interbank</h4>
+                                    <p>
+                                        Usa el número de cuenta o CCI según el banco desde el que
+                                        realizarás la transferencia.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="payment-action-card detraction-card">
+                                <span className="action-icon">🧾</span>
+                                <div>
+                                    <h4>Cuenta de detracción</h4>
+                                    <p>
+                                        Para operaciones sujetas a detracción utiliza únicamente esta
+                                        cuenta cuando corresponda.
+                                    </p>
+                                    <div className="detraction-number-row">
+                                        <strong>{DATOS_BANCARIOS.cuentaDetraccion}</strong>
+                                        <button
+                                            type="button"
+                                            className="copy-mini copy-light"
+                                            onClick={() =>
+                                                copiarTexto(
+                                                    DATOS_BANCARIOS.cuentaDetraccion,
+                                                    "Cuenta de detracción"
+                                                )
+                                            }
+                                        >
+                                            📋 Copiar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <a
+                                className="payment-whatsapp-btn"
+                                href={`https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(
+                                    `Hola, ya realicé una transferencia a nombre de ${DATOS_BANCARIOS.titular} y deseo enviar mi constancia de pago.`
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                💬 Enviar constancia por WhatsApp
+                            </a>
+
+                            <p className="payment-warning">
+                                🔒 Antes de transferir, verifica que el titular mostrado por tu banco
+                                corresponda a <b>{DATOS_BANCARIOS.titular}</b>.
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="pay-panel">
-                        {pagoActivo === "tarjeta" && (
-                            <div className="pay-content">
+                    <div className="comprobante-section">
+                        <div className="section-head comprobante-head">
+                            <div className="ey">Comprobante de pago</div>
+                            <h2>
+                                Tramita tu <b>boleta o factura</b>
+                            </h2>
+                            <div className="uline"></div>
+                            <p>
+                                Elige el comprobante, completa tus datos y envía la solicitud por
+                                WhatsApp. Revisaremos la información antes de la emisión.
+                            </p>
+                        </div>
+
+                        <div className="receipt-steps">
+                            <div className="receipt-step active-step">
+                                <span>1</span>
                                 <div>
-                                    <h3>Pago con tarjeta</h3>
+                                    <b>Elige</b>
+                                    <small>Boleta o factura</small>
+                                </div>
+                            </div>
+                            <div className="receipt-step">
+                                <span>2</span>
+                                <div>
+                                    <b>Completa</b>
+                                    <small>Tus datos fiscales</small>
+                                </div>
+                            </div>
+                            <div className="receipt-step">
+                                <span>3</span>
+                                <div>
+                                    <b>Solicita</b>
+                                    <small>Envíalo por WhatsApp</small>
+                                </div>
+                            </div>
+                        </div>
 
-                                    <p>
-                                        Solicita el link de pago seguro por WhatsApp. Te enviaremos
-                                        el enlace según el monto de tu compra o servicio.
-                                    </p>
+                        <div className="receipt-type-grid">
+                            <button
+                                type="button"
+                                className={`receipt-type-card ${comprobante === "boleta" ? "active" : ""
+                                    }`}
+                                onClick={() => setComprobante("boleta")}
+                            >
+                                <span className="receipt-type-icon">🧾</span>
+                                <span>
+                                    <b>Boleta electrónica</b>
+                                    <small>Para persona natural · requiere DNI</small>
+                                </span>
+                                <span className="receipt-check">
+                                    {comprobante === "boleta" ? "✓" : "○"}
+                                </span>
+                            </button>
 
-                                    <div className="cards-list">
-                                        <span>VISA</span>
-                                        <span>Mastercard</span>
-                                        <span>AMEX</span>
-                                        <span>Diners</span>
+                            <button
+                                type="button"
+                                className={`receipt-type-card ${comprobante === "factura" ? "active" : ""
+                                    }`}
+                                onClick={() => setComprobante("factura")}
+                            >
+                                <span className="receipt-type-icon">📄</span>
+                                <span>
+                                    <b>Factura electrónica</b>
+                                    <small>Para empresa o negocio · requiere RUC</small>
+                                </span>
+                                <span className="receipt-check">
+                                    {comprobante === "factura" ? "✓" : "○"}
+                                </span>
+                            </button>
+                        </div>
+
+                        <div className="receipt-workspace">
+                            <div className="comprobante-form interactive-form">
+                                <div className="form-title-row">
+                                    <div>
+                                        <span className="form-kicker">
+                                            {comprobante === "boleta"
+                                                ? "DATOS PARA BOLETA"
+                                                : "DATOS PARA FACTURA"}
+                                        </span>
+                                        <h3>
+                                            {comprobante === "boleta"
+                                                ? "Información del cliente"
+                                                : "Información de la empresa"}
+                                        </h3>
                                     </div>
+                                    <span className="required-note">* Campos obligatorios</span>
+                                </div>
 
-                                    <a
-                                        className="btn-primary"
-                                        href={whatsappCotizacion}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Solicitar link de pago
-                                    </a>
+                                {comprobante === "boleta" ? (
+                                    <>
+                                        <div className="form-group">
+                                            <label htmlFor="comprobante-dni">
+                                                DNI <span>*</span>
+                                            </label>
+                                            <div className="input-with-icon">
+                                                <span>🪪</span>
+                                                <input
+                                                    id="comprobante-dni"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    maxLength={8}
+                                                    placeholder="8 dígitos"
+                                                    value={datosComprobante.dni}
+                                                    onChange={(e) =>
+                                                        actualizarDatoComprobante(
+                                                            "dni",
+                                                            e.target.value.replace(/\D/g, "")
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                            <small
+                                                className={
+                                                    datosComprobante.dni.length === 8
+                                                        ? "field-ok"
+                                                        : "field-hint"
+                                                }
+                                            >
+                                                {datosComprobante.dni.length === 8
+                                                    ? "✓ DNI con 8 dígitos"
+                                                    : `${datosComprobante.dni.length}/8 dígitos`}
+                                            </small>
+                                        </div>
 
-                                    <small>
-                                        Atención por WhatsApp: {DATOS_EMPRESA.telefono1} /{" "}
-                                        {DATOS_EMPRESA.telefono2}
+                                        <div className="form-group">
+                                            <label htmlFor="comprobante-nombres">
+                                                Nombres y apellidos <span>*</span>
+                                            </label>
+                                            <div className="input-with-icon">
+                                                <span>👤</span>
+                                                <input
+                                                    id="comprobante-nombres"
+                                                    type="text"
+                                                    placeholder="Nombre completo"
+                                                    value={datosComprobante.nombres}
+                                                    onChange={(e) =>
+                                                        actualizarDatoComprobante(
+                                                            "nombres",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="form-group">
+                                            <label htmlFor="comprobante-ruc">
+                                                RUC <span>*</span>
+                                            </label>
+                                            <div className="input-with-icon">
+                                                <span>🏢</span>
+                                                <input
+                                                    id="comprobante-ruc"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    maxLength={11}
+                                                    placeholder="11 dígitos"
+                                                    value={datosComprobante.ruc}
+                                                    onChange={(e) =>
+                                                        actualizarDatoComprobante(
+                                                            "ruc",
+                                                            e.target.value.replace(/\D/g, "")
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                            <small
+                                                className={
+                                                    datosComprobante.ruc.length === 11
+                                                        ? "field-ok"
+                                                        : "field-hint"
+                                                }
+                                            >
+                                                {datosComprobante.ruc.length === 11
+                                                    ? "✓ RUC con 11 dígitos"
+                                                    : `${datosComprobante.ruc.length}/11 dígitos`}
+                                            </small>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label htmlFor="comprobante-razon">
+                                                Razón social <span>*</span>
+                                            </label>
+                                            <div className="input-with-icon">
+                                                <span>🏷️</span>
+                                                <input
+                                                    id="comprobante-razon"
+                                                    type="text"
+                                                    placeholder="Razón social de la empresa"
+                                                    value={datosComprobante.razonSocial}
+                                                    onChange={(e) =>
+                                                        actualizarDatoComprobante(
+                                                            "razonSocial",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group form-group-full">
+                                            <label htmlFor="comprobante-direccion">
+                                                Dirección fiscal <span>*</span>
+                                            </label>
+                                            <div className="input-with-icon">
+                                                <span>📍</span>
+                                                <input
+                                                    id="comprobante-direccion"
+                                                    type="text"
+                                                    placeholder="Dirección fiscal registrada"
+                                                    value={datosComprobante.direccionFiscal}
+                                                    onChange={(e) =>
+                                                        actualizarDatoComprobante(
+                                                            "direccionFiscal",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                <div className="form-group form-group-full">
+                                    <label htmlFor="comprobante-correo">
+                                        Correo electrónico <span>*</span>
+                                    </label>
+                                    <div className="input-with-icon">
+                                        <span>✉️</span>
+                                        <input
+                                            id="comprobante-correo"
+                                            type="email"
+                                            placeholder={
+                                                comprobante === "boleta"
+                                                    ? "correo@ejemplo.com"
+                                                    : "facturacion@empresa.com"
+                                            }
+                                            value={datosComprobante.correo}
+                                            onChange={(e) =>
+                                                actualizarDatoComprobante(
+                                                    "correo",
+                                                    e.target.value
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <small className="field-hint">
+                                        El comprobante será enviado al correo indicado.
                                     </small>
                                 </div>
 
-                                <div className="pay-resume-card">
-                                    <h4>Pago seguro</h4>
-                                    <p>Validación previa por WhatsApp</p>
-                                    <strong>{DATOS_EMPRESA.titular}</strong>
-                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-comprobante interactive-submit"
+                                    onClick={solicitarComprobante}
+                                >
+                                    <span>💬</span>
+                                    <span>
+                                        Solicitar{" "}
+                                        {comprobante === "boleta"
+                                            ? "boleta electrónica"
+                                            : "factura electrónica"}
+                                    </span>
+                                    <span>→</span>
+                                </button>
                             </div>
-                        )}
 
-                        {pagoActivo === "yape" && (
-                            <div className="pay-content">
-                                <div>
-                                    <h3>Pago con Yape</h3>
+                            <aside className="receipt-summary">
+                                <div className="receipt-summary-icon">
+                                    {comprobante === "boleta" ? "🧾" : "📄"}
+                                </div>
+                                <span className="summary-kicker">RESUMEN</span>
+                                <h3>
+                                    {comprobante === "boleta"
+                                        ? "Boleta electrónica"
+                                        : "Factura electrónica"}
+                                </h3>
 
-                                    <p>
-                                        Escanea el código QR o realiza el pago al número autorizado
-                                        de INGEDATA.
-                                    </p>
-
-                                    <div className="datos-pago">
-                                        <p>
-                                            <b>Número Yape:</b> {DATOS_EMPRESA.yape}
-                                        </p>
-                                        <p>
-                                            <b>Titular:</b> {DATOS_EMPRESA.titular}
-                                        </p>
-                                        <p>
-                                            <b>Enviar constancia a:</b> {DATOS_EMPRESA.correo}
-                                        </p>
+                                <div className="summary-list">
+                                    {comprobante === "boleta" ? (
+                                        <>
+                                            <div>
+                                                <span>DNI</span>
+                                                <b>
+                                                    {datosComprobante.dni || "Pendiente"}
+                                                </b>
+                                            </div>
+                                            <div>
+                                                <span>Cliente</span>
+                                                <b>
+                                                    {datosComprobante.nombres ||
+                                                        "Pendiente"}
+                                                </b>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <span>RUC</span>
+                                                <b>
+                                                    {datosComprobante.ruc || "Pendiente"}
+                                                </b>
+                                            </div>
+                                            <div>
+                                                <span>Razón social</span>
+                                                <b>
+                                                    {datosComprobante.razonSocial ||
+                                                        "Pendiente"}
+                                                </b>
+                                            </div>
+                                        </>
+                                    )}
+                                    <div>
+                                        <span>Correo</span>
+                                        <b>{datosComprobante.correo || "Pendiente"}</b>
                                     </div>
-
-                                    <a
-                                        className="btn-primary"
-                                        href={whatsappCotizacion}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Enviar constancia por WhatsApp
-                                    </a>
                                 </div>
 
-                                <div className="qr-box">
-                                    <ImagenRecurso
-                                        imagenes={[
-                                            img("yape.jpg"),
-                                            "/yape.jpg",
-                                            img("yape-qr.jpg"),
-                                            "/yape-qr.jpg",
-                                        ]}
-                                        alt="QR Yape INGEDATA"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {pagoActivo === "plin" && (
-                            <div className="pay-content">
-                                <div>
-                                    <h3>Pago con Plin</h3>
-
+                                <div className="summary-security">
+                                    <span>✓</span>
                                     <p>
-                                        Realiza tu pago mediante Plin usando el número autorizado de
-                                        la empresa.
+                                        Tus datos se enviarán directamente al WhatsApp de
+                                        INGEDATA para su revisión.
                                     </p>
-
-                                    <div className="datos-pago">
-                                        <p>
-                                            <b>Número Plin:</b> {DATOS_EMPRESA.plin}
-                                        </p>
-                                        <p>
-                                            <b>Titular:</b> {DATOS_EMPRESA.titular}
-                                        </p>
-                                        <p>
-                                            <b>Enviar constancia a:</b> {DATOS_EMPRESA.correo}
-                                        </p>
-                                    </div>
-
-                                    <a
-                                        className="btn-primary"
-                                        href={whatsappCotizacion}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Enviar constancia por WhatsApp
-                                    </a>
                                 </div>
-
-                                <div className="pay-resume-card">
-                                    <h4>PLIN</h4>
-                                    <p>{DATOS_EMPRESA.plin}</p>
-                                    <strong>{DATOS_EMPRESA.titular}</strong>
-                                </div>
-                            </div>
-                        )}
-
-                        {pagoActivo === "transferencia" && (
-                            <div className="pay-content">
-                                <div>
-                                    <h3>Transferencia bancaria</h3>
-
-                                    <p>
-                                        Solicita los datos bancarios oficiales por WhatsApp para
-                                        confirmar la cuenta vigente antes de pagar.
-                                    </p>
-
-                                    <div className="datos-pago">
-                                        <p>
-                                            <b>Titular:</b> {DATOS_EMPRESA.titular}
-                                        </p>
-                                        <p>
-                                            <b>RUC:</b> {DATOS_EMPRESA.ruc}
-                                        </p>
-                                        <p>
-                                            <b>WhatsApp:</b> {DATOS_EMPRESA.telefono1} /{" "}
-                                            {DATOS_EMPRESA.telefono2}
-                                        </p>
-                                        <p>
-                                            <b>Correo:</b> {DATOS_EMPRESA.correo}
-                                        </p>
-                                    </div>
-
-                                    <a
-                                        className="btn-primary"
-                                        href={whatsappCotizacion}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        Solicitar datos bancarios
-                                    </a>
-                                </div>
-
-                                <div className="pay-resume-card">
-                                    <h4>Transferencia</h4>
-                                    <p>Cuenta oficial previa confirmación</p>
-                                    <strong>{DATOS_EMPRESA.titular}</strong>
-                                </div>
-                            </div>
-                        )}
+                            </aside>
+                        </div>
                     </div>
                 </div>
             </section>

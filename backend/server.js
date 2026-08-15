@@ -67,7 +67,7 @@ app.get("/productos", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
-  console.log(`Conectando a Supabase host: ${process.env.DB_HOST}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Servidor backend corriendo en puerto ${PORT}`);
+    console.log(`Conectando a Supabase host: ${process.env.DB_HOST}`);
 });

@@ -1667,3 +1667,812 @@ footer h4 {
         font-size: 0.78rem;
     }
 }
+
+
+
+/* =========================================
+   PAGOS - TARJETA / TRANSFERENCIA
+========================================= */
+
+.pay-tabs.pay-tabs-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* =========================================
+   COMPROBANTES - BOLETA / FACTURA
+========================================= */
+
+.comprobante-section {
+    margin-top: 72px;
+}
+
+.comprobante-head {
+    margin-bottom: 30px;
+}
+
+.comprobante-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    max-width: 650px;
+    margin: 0 auto 30px;
+}
+
+    .comprobante-tabs button {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 14px;
+        padding: 17px 22px;
+        font-family: "Montserrat", sans-serif;
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: var(--navy-800);
+        cursor: pointer;
+        transition: 0.25s var(--ease);
+    }
+
+        .comprobante-tabs button:hover {
+            border-color: var(--blue);
+            transform: translateY(-1px);
+        }
+
+        .comprobante-tabs button.active {
+            background: var(--blue);
+            color: #fff;
+            border-color: var(--blue);
+            box-shadow: 0 10px 25px rgba(29, 111, 229, 0.22);
+        }
+
+.comprobante-form {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 34px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    color: var(--navy-800);
+    font-family: "Montserrat", sans-serif;
+    font-weight: 700;
+    font-size: 0.86rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 15px 16px;
+    border: 1px solid #d8e1ed;
+    border-radius: 12px;
+    background: #fff;
+    color: var(--navy-800);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    transition: 0.2s ease;
+}
+
+    .form-group input:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(29, 111, 229, 0.1);
+    }
+
+.btn-comprobante {
+    grid-column: 1 / -1;
+    width: 100%;
+    border: none;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 13px;
+    padding: 17px 20px;
+    font-family: "Montserrat", sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.22s var(--ease);
+}
+
+    .btn-comprobante:hover {
+        background: var(--blue-600);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(29, 111, 229, 0.22);
+    }
+
+@media (max-width: 700px) {
+    .pay-tabs.pay-tabs-two,
+    .comprobante-tabs,
+    .comprobante-form {
+        grid-template-columns: 1fr;
+    }
+
+    .comprobante-form {
+        padding: 24px;
+    }
+
+    .form-group-full,
+    .btn-comprobante {
+        grid-column: 1;
+    }
+}
+
+
+/* =========================================================
+   PAGOS 2026 - TRANSFERENCIA ÚNICA + COMPROBANTES INTERACTIVOS
+   ========================================================= */
+
+.payment-main-head {
+    margin-bottom: 36px;
+}
+
+.bank-payment-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+    gap: 28px;
+    align-items: stretch;
+    margin-top: 28px;
+}
+
+.bank-card-interactive {
+    position: relative;
+    overflow: hidden;
+    min-height: 520px;
+    border-radius: 28px;
+    padding: 34px;
+    color: #fff;
+    background: radial-gradient(circle at 88% 12%, rgba(111, 190, 255, 0.34), transparent 27%), linear-gradient(145deg, #082e67 0%, #0c4b9f 52%, #1f74e7 100%);
+    box-shadow: 0 28px 60px rgba(8, 46, 103, 0.24);
+}
+
+    .bank-card-interactive::before,
+    .bank-card-interactive::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .bank-card-interactive::before {
+        width: 340px;
+        height: 340px;
+        right: -160px;
+        bottom: -170px;
+    }
+
+    .bank-card-interactive::after {
+        width: 220px;
+        height: 220px;
+        right: -95px;
+        bottom: -110px;
+    }
+
+.bank-card-top,
+.bank-owner,
+.bank-number-block,
+.bank-meta {
+    position: relative;
+    z-index: 2;
+}
+
+.bank-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 48px;
+}
+
+.bank-label {
+    display: inline-block;
+    margin-bottom: 7px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+}
+
+.bank-card-top h3 {
+    font-family: "Montserrat";
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    margin: 0;
+}
+
+.bank-currency {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(10px);
+}
+
+    .bank-currency span {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 10px;
+        background: #fff;
+        color: #0b4b9c;
+        font-weight: 900;
+    }
+
+    .bank-currency small {
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+.bank-owner {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 34px;
+}
+
+    .bank-owner span,
+    .bank-number-block span,
+    .bank-meta span {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.82rem;
+    }
+
+    .bank-owner strong {
+        font-family: "Montserrat";
+        font-size: 1.3rem;
+    }
+
+    .bank-owner small {
+        color: rgba(255, 255, 255, 0.78);
+    }
+
+.bank-number-block {
+    padding: 18px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bank-number-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.bank-number {
+    display: block;
+    font-family: "Montserrat";
+    font-size: clamp(1.45rem, 2.5vw, 2.1rem);
+    letter-spacing: 0.045em;
+    word-break: break-word;
+}
+
+.bank-number-small {
+    font-size: clamp(1.05rem, 2vw, 1.55rem);
+}
+
+.copy-mini {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-radius: 10px;
+    padding: 8px 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+    .copy-mini:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+.bank-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 17px;
+}
+
+    .bank-meta > div {
+        padding: 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .bank-meta span,
+    .bank-meta b {
+        display: block;
+    }
+
+    .bank-meta b {
+        margin-top: 4px;
+    }
+
+.payment-actions-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    background: #f8fbff;
+}
+
+.payment-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 16px;
+    border-radius: 15px;
+    background: #eaf8f1;
+    color: #155a3e;
+}
+
+.status-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #25b77a;
+    box-shadow: 0 0 0 6px rgba(37, 183, 122, 0.12);
+    flex-shrink: 0;
+}
+
+.payment-status b,
+.payment-status small {
+    display: block;
+}
+
+.payment-status small {
+    margin-top: 3px;
+    color: #4f7f6b;
+}
+
+.payment-action-card {
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+    padding: 19px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fff;
+}
+
+.action-icon {
+    display: grid;
+    width: 45px;
+    height: 45px;
+    place-items: center;
+    border-radius: 13px;
+    background: var(--blue-soft);
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.payment-action-card h4 {
+    margin: 0 0 7px;
+    color: var(--navy-800);
+}
+
+.payment-action-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: 0.88rem;
+}
+
+.detraction-card {
+    border-color: rgba(29, 111, 229, 0.28);
+    background: linear-gradient(135deg, #f8fbff, #eef6ff);
+}
+
+.detraction-number-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 13px;
+}
+
+    .detraction-number-row strong {
+        color: var(--navy-800);
+        font-family: "Montserrat";
+        font-size: 1.05rem;
+        letter-spacing: 0.04em;
+    }
+
+.copy-light {
+    border-color: #d5e5f8;
+    background: #fff;
+    color: var(--blue);
+}
+
+.payment-whatsapp-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    border-radius: 14px;
+    background: #16a765;
+    color: #fff;
+    text-align: center;
+    font-weight: 800;
+    transition: 0.22s;
+}
+
+    .payment-whatsapp-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 26px rgba(22, 167, 101, 0.24);
+    }
+
+.payment-warning {
+    margin: 0;
+    padding: 13px 14px;
+    border-radius: 13px;
+    background: #fff7e7;
+    color: #795716;
+    font-size: 0.83rem;
+    line-height: 1.5;
+}
+
+/* COMPROBANTES */
+
+.comprobante-section {
+    margin-top: 86px;
+}
+
+.receipt-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 920px;
+    margin: 34px auto 28px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.receipt-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    border-right: 1px solid var(--line);
+}
+
+    .receipt-step:last-child {
+        border-right: 0;
+    }
+
+    .receipt-step > span {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 50%;
+        background: #edf3fb;
+        color: var(--navy-800);
+        font-weight: 800;
+    }
+
+    .receipt-step b,
+    .receipt-step small {
+        display: block;
+    }
+
+    .receipt-step small {
+        color: var(--muted);
+        margin-top: 2px;
+    }
+
+    .receipt-step.active-step > span {
+        background: var(--blue);
+        color: #fff;
+    }
+
+.receipt-type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    max-width: 940px;
+    margin: 0 auto 28px;
+}
+
+.receipt-type-card {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 15px;
+    align-items: center;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fff;
+    color: var(--navy-800);
+    text-align: left;
+    cursor: pointer;
+    transition: 0.22s;
+}
+
+    .receipt-type-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(29, 111, 229, 0.5);
+    }
+
+    .receipt-type-card.active {
+        border-color: var(--blue);
+        background: #f1f7ff;
+        box-shadow: 0 12px 30px rgba(29, 111, 229, 0.12);
+    }
+
+.receipt-type-icon {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--blue-soft);
+    font-size: 1.35rem;
+}
+
+.receipt-type-card b,
+.receipt-type-card small {
+    display: block;
+}
+
+.receipt-type-card small {
+    margin-top: 5px;
+    color: var(--muted);
+}
+
+.receipt-check {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-weight: 900;
+}
+
+.receipt-type-card.active .receipt-check {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+}
+
+.receipt-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    gap: 22px;
+    align-items: start;
+    max-width: 1120px;
+    margin: 0 auto;
+}
+
+.comprobante-form.interactive-form {
+    max-width: none;
+    margin: 0;
+    padding: 30px;
+}
+
+.form-title-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 12px;
+}
+
+.form-kicker,
+.summary-kicker {
+    display: block;
+    color: var(--blue);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+}
+
+.form-title-row h3 {
+    margin: 5px 0 0;
+    color: var(--navy-800);
+    font-family: "Montserrat";
+}
+
+.required-note {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.form-group label span {
+    color: #e05252;
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+    .input-with-icon > span {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1rem;
+        pointer-events: none;
+    }
+
+    .input-with-icon input {
+        padding-left: 46px;
+    }
+
+.field-hint,
+.field-ok {
+    font-size: 0.76rem;
+}
+
+.field-hint {
+    color: var(--muted);
+}
+
+.field-ok {
+    color: #16865a;
+    font-weight: 700;
+}
+
+.interactive-submit {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.receipt-summary {
+    position: sticky;
+    top: 100px;
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    background: linear-gradient(180deg, #0b356f, #0c4f9f);
+    color: #fff;
+    box-shadow: 0 22px 45px rgba(10, 52, 109, 0.2);
+}
+
+.receipt-summary-icon {
+    display: grid;
+    width: 58px;
+    height: 58px;
+    place-items: center;
+    margin-bottom: 20px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 1.55rem;
+}
+
+.receipt-summary .summary-kicker {
+    color: #9bc6ff;
+}
+
+.receipt-summary h3 {
+    margin: 6px 0 22px;
+    font-family: "Montserrat";
+    font-size: 1.25rem;
+}
+
+.summary-list {
+    display: grid;
+    gap: 10px;
+}
+
+    .summary-list > div {
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .summary-list span,
+    .summary-list b {
+        display: block;
+    }
+
+    .summary-list span {
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 0.75rem;
+    }
+
+    .summary-list b {
+        margin-top: 4px;
+        word-break: break-word;
+    }
+
+.summary-security {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-top: 22px;
+    padding: 13px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.09);
+}
+
+    .summary-security span {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 50%;
+        background: #33b878;
+        flex-shrink: 0;
+    }
+
+    .summary-security p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+
+@media (max-width: 980px) {
+    .bank-payment-layout,
+    .receipt-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .receipt-summary {
+        position: static;
+    }
+}
+
+@media (max-width: 700px) {
+    .bank-card-interactive,
+    .payment-actions-panel,
+    .comprobante-form.interactive-form,
+    .receipt-summary {
+        padding: 22px;
+        border-radius: 20px;
+    }
+
+    .bank-card-top {
+        flex-direction: column;
+        margin-bottom: 32px;
+    }
+
+    .bank-meta,
+    .receipt-type-grid,
+    .receipt-steps {
+        grid-template-columns: 1fr;
+    }
+
+    .receipt-step {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+        .receipt-step:last-child {
+            border-bottom: 0;
+        }
+
+    .receipt-type-card {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .form-title-row {
+        flex-direction: column;
+        gap: 7px;
+    }
+}
