@@ -686,23 +686,14 @@ Por favor, confírmenme la emisión del comprobante.`;
 
             <header>
                 <div className="wrap head">
-                    <a href="#inicio" className="logo">
-                        <span className="mark">
+                    <a href="#inicio" className="logo logo-completo" aria-label="INGEDATA - Inicio">
+                        <span className="mark mark-completo">
                             <ImagenRecurso
                                 imagenes={[
                                     img("logo ingedata.jpeg"),
-                                    img("logo ingedata.jpg"),
-                                    img("logo ingedata.png"),
                                 ]}
-                                alt="Logo INGEDATA"
+                                alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
                             />
-                        </span>
-
-                        <span className="txt">
-                            <span className="name">
-                                INGE<b>DATA</b>
-                            </span>
-                            <span className="sub">S . A . C .</span>
                         </span>
                     </a>
 
@@ -1071,7 +1062,6 @@ Por favor, confírmenme la emisión del comprobante.`;
                                             <div className="priceRow">
                                                 <span className="price quote-price">
                                                     Precio a cotizar
-
                                                 </span>
 
                                                 <button
@@ -1641,23 +1631,14 @@ Por favor, confírmenme la emisión del comprobante.`;
             <footer>
                 <div className="wrap fwrap">
                     <div>
-                        <a href="#inicio" className="logo">
-                            <span className="mark">
+                        <a href="#inicio" className="logo logo-completo" aria-label="INGEDATA - Inicio">
+                            <span className="mark mark-completo">
                                 <ImagenRecurso
                                     imagenes={[
                                         img("logo ingedata.jpeg"),
-                                        img("logo ingedata.jpg"),
-                                        img("logo ingedata.png"),
                                     ]}
-                                    alt="Logo INGEDATA"
+                                    alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
                                 />
-                            </span>
-
-                            <span className="txt">
-                                <span className="name">
-                                    INGE<b>DATA</b>
-                                </span>
-                                <span className="sub">S . A . C .</span>
                             </span>
                         </a>
 
@@ -1767,7 +1748,7 @@ Por favor, confírmenme la emisión del comprobante.`;
                                     onClick={() => quitar(item.id)}
                                     title="Quitar de la solicitud"
                                 >
-                                    ✕   
+                                    ✕
                                 </button>
                             </div>
                         ))
