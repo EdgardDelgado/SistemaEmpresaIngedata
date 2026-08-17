@@ -527,14 +527,6 @@ function App() {
         })
         .filter(Boolean);
 
-    const subtotal = itemsCarrito.reduce(
-        (acc, item) => acc + Number(item.precio || 0) * item.cantidad,
-        0
-    );
-
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
-
     const cantidadTotal = itemsCarrito.reduce(
         (acc, item) => acc + item.cantidad,
         0
@@ -542,19 +534,18 @@ function App() {
 
     const textoCotizacion =
         itemsCarrito.length === 0
-            ? "Hola, deseo solicitar una cotización con INGEDATA."
-            : `Hola, deseo cotizar lo siguiente:\n\n${itemsCarrito
-                .map(
-                    (item) =>
-                        `- ${item.nombre} x${item.cantidad} | S/ ${(
-                            Number(item.precio || 0) * item.cantidad
-                        ).toFixed(2)}`
-                )
-                .join("\n")}\n\nSubtotal: S/ ${subtotal.toFixed(
-                    2
-                )}\nIGV: S/ ${igv.toFixed(2)}\nTotal referencial: S/ ${total.toFixed(
-                    2
-                )}`;
+            ? `Hola, deseo solicitar una proforma con INGEDATA.
+
+Aún no he seleccionado productos. Por favor, deseo recibir información comercial.`
+            : `Hola, deseo solicitar una PROFORMA con INGEDATA.
+
+Productos / servicios seleccionados:
+
+${itemsCarrito
+                .map((item) => `- ${item.nombre} x ${item.cantidad}`)
+                .join("\n")}
+
+Por favor, indíqueme precios, disponibilidad, plazo de entrega y condiciones comerciales.`;
 
     const whatsappCotizacion = `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(
         textoCotizacion
@@ -571,7 +562,7 @@ function App() {
 
     const agregar = (id) => {
         setCarrito((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-        mostrarToast("Producto agregado al carrito");
+        mostrarToast("Producto agregado a la solicitud");
     };
 
     const cambiarCantidad = (id, cambio) => {
@@ -600,19 +591,6 @@ function App() {
     const toggleFavorito = (id) => {
         setFavoritos((prev) => ({ ...prev, [id]: !prev[id] }));
         mostrarToast(favoritos[id] ? "Quitado de favoritos" : "Añadido a favoritos");
-    };
-
-    const cotizarProducto = (producto) => {
-        const mensaje = `Hola, deseo solicitar una cotización del siguiente producto o servicio de INGEDATA:
-
-Producto/Servicio: ${producto.nombre}
-Categoría: ${producto.cat}
-Marca: ${producto.brand || "INGEDATA"}
-
-Por favor, indíqueme disponibilidad, precio y condiciones.`;
-
-        const url = `https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(mensaje)}`;
-        window.open(url, "_blank", "noopener,noreferrer");
     };
 
     const copiarTexto = async (texto, etiqueta) => {
@@ -732,23 +710,18 @@ Por favor, confírmenme la emisión del comprobante.`;
                         <a href="#inicio">Inicio</a>
                         <a href="#nosotros">Nosotros</a>
                         <a href="#servicios">Servicios</a>
-                        <a href="#tienda">Tienda</a>
+                        <a href="#tienda">Catálogo</a>
                         <a href="#pagos">Pagos</a>
                         <a href="#contacto">Contacto</a>
                     </nav>
 
                     <div className="actions">
                         <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
-                            🛒 Carrito <span className="badge">{cantidadTotal}</span>
+                            📋 Solicitud <span className="badge">{cantidadTotal}</span>
                         </button>
 
-                        <a
-                            href={whatsappCotizacion}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn-quote"
-                        >
-                            Cotizar ahora →
+                        <a href="#tienda" className="btn-quote">
+                            Solicitar proforma →
                         </a>
                     </div>
                 </div>
@@ -782,13 +755,8 @@ Por favor, confírmenme la emisión del comprobante.`;
                         </p>
 
                         <div className="btns">
-                            <a
-                                href={whatsappCotizacion}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="btn-primary"
-                            >
-                                Solicitar cotización ✈
+                            <a href="#tienda" className="btn-primary">
+                                Seleccionar productos →
                             </a>
 
                             <a href="#servicios" className="btn-ghost">
@@ -996,14 +964,14 @@ Por favor, confírmenme la emisión del comprobante.`;
             <section className="shop section" id="tienda">
                 <div className="wrap">
                     <div className="section-head">
-                        <div className="ey">Tienda en línea</div>
+                        <div className="ey">Catálogo empresarial</div>
                         <h2>
                             Productos y <b>Servicios</b>
                         </h2>
                         <div className="uline"></div>
                         <p>
-                            Catálogo de materiales, equipos y servicios técnicos de INGEDATA
-                            S.A.C.
+                            Selecciona los productos o servicios que necesitas. Los precios se
+                            cotizan mediante una proforma personalizada de INGEDATA S.A.C.
                         </p>
                     </div>
 
@@ -1019,8 +987,6 @@ Por favor, confírmenme la emisión del comprobante.`;
 
                         <select value={orden} onChange={(e) => setOrden(e.target.value)}>
                             <option value="default">Ordenar</option>
-                            <option value="asc">Precio menor a mayor</option>
-                            <option value="desc">Precio mayor a menor</option>
                             <option value="az">Nombre A-Z</option>
                         </select>
                     </div>
@@ -1056,8 +1022,6 @@ Por favor, confírmenme la emisión del comprobante.`;
                     ) : (
                         <div className="grid">
                             {lista.map((p) => {
-                                const requiereCotizacion = p.tag === "Cotizar";
-
                                 return (
                                     <article className="card in" key={p.id}>
                                         <div className="media">
@@ -1086,21 +1050,12 @@ Por favor, confírmenme la emisión del comprobante.`;
                                                 {favoritos[p.id] ? "♥" : "♡"}
                                             </button>
 
-                                            {requiereCotizacion ? (
-                                                <button
-                                                    className="quick quote-product"
-                                                    onClick={() => cotizarProducto(p)}
-                                                >
-                                                    Solicitar cotización
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    className="quick"
-                                                    onClick={() => agregar(p.id)}
-                                                >
-                                                    Agregar al carrito
-                                                </button>
-                                            )}
+                                            <button
+                                                className="quick"
+                                                onClick={() => agregar(p.id)}
+                                            >
+                                                Agregar a solicitud
+                                            </button>
                                         </div>
 
                                         <div className="body">
@@ -1114,35 +1069,18 @@ Por favor, confírmenme la emisión del comprobante.`;
                                             </div>
 
                                             <div className="priceRow">
-                                                {requiereCotizacion ? (
-                                                    <>
-                                                        <span className="price quote-price">
-                                                            Precio a cotizar
-                                                        </span>
+                                                <span className="price quote-price">
+                                                    Precio a cotizar
 
-                                                        <button
-                                                            className="add quote-add"
-                                                            onClick={() => cotizarProducto(p)}
-                                                            title="Solicitar cotización por WhatsApp"
-                                                        >
-                                                            💬
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="price">
-                                                            S/ {Number(p.precio || 0).toFixed(2)}{" "}
-                                                            <small>+IGV</small>
-                                                        </span>
+                                                </span>
 
-                                                        <button
-                                                            className="add"
-                                                            onClick={() => agregar(p.id)}
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </>
-                                                )}
+                                                <button
+                                                    className="add"
+                                                    onClick={() => agregar(p.id)}
+                                                    title="Agregar a solicitud"
+                                                >
+                                                    +
+                                                </button>
                                             </div>
                                         </div>
                                     </article>
@@ -1693,13 +1631,8 @@ Por favor, confírmenme la emisión del comprobante.`;
                             </p>
                         </div>
 
-                        <a
-                            className="btn-white"
-                            href={whatsappCotizacion}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            Escribir por WhatsApp →
+                        <a className="btn-white" href="#tienda">
+                            Armar solicitud →
                         </a>
                     </div>
                 </div>
@@ -1744,7 +1677,7 @@ Por favor, confírmenme la emisión del comprobante.`;
                                 <a href="#servicios">Servicios</a>
                             </li>
                             <li>
-                                <a href="#tienda">Tienda</a>
+                                <a href="#tienda">Catálogo</a>
                             </li>
                             <li>
                                 <a href="#pagos">Pagos</a>
@@ -1770,7 +1703,7 @@ Por favor, confírmenme la emisión del comprobante.`;
 
                 <div className="wrap copyr">
                     <span>© 2026 INGEDATA S.A.C. Todos los derechos reservados.</span>
-                    <span>Portal empresarial y e-commerce.</span>
+                    <span>Portal empresarial y catálogo de soluciones.</span>
                 </div>
             </footer>
 
@@ -1788,7 +1721,7 @@ Por favor, confírmenme la emisión del comprobante.`;
 
             <aside className={`drawer ${carritoAbierto ? "show" : ""}`}>
                 <div className="dh">
-                    <h3>🛒 Carrito</h3>
+                    <h3>📋 Solicitud de proforma</h3>
 
                     <button className="close" onClick={() => setCarritoAbierto(false)}>
                         ×
@@ -1798,22 +1731,23 @@ Por favor, confírmenme la emisión del comprobante.`;
                 <div className="items">
                     {itemsCarrito.length === 0 ? (
                         <div className="empty">
-                            <span className="e">🛒</span>
-                            <p>Tu carrito está vacío.</p>
+                            <span className="e">📋</span>
+                            <p>Aún no has seleccionado productos.</p>
                             <button onClick={() => setCarritoAbierto(false)}>
-                                Seguir viendo
+                                Ver catálogo
                             </button>
                         </div>
                     ) : (
                         itemsCarrito.map((item) => (
                             <div className="ci" key={item.id}>
-                                <ImagenRecurso imagenes={obtenerImagenesProducto(item)} alt={item.nombre} />
+                                <ImagenRecurso
+                                    imagenes={obtenerImagenesProducto(item)}
+                                    alt={item.nombre}
+                                />
 
                                 <div className="info">
                                     <h4>{item.nombre}</h4>
-                                    <div className="p">
-                                        S/ {Number(item.precio || 0).toFixed(2)}
-                                    </div>
+                                    <div className="p">Cantidad solicitada</div>
 
                                     <div className="qty">
                                         <button onClick={() => cambiarCantidad(item.id, -1)}>
@@ -1828,8 +1762,12 @@ Por favor, confírmenme la emisión del comprobante.`;
                                     </div>
                                 </div>
 
-                                <button className="rm" onClick={() => quitar(item.id)}>
-                                    ✕
+                                <button
+                                    className="rm"
+                                    onClick={() => quitar(item.id)}
+                                    title="Quitar de la solicitud"
+                                >
+                                    ✕   
                                 </button>
                             </div>
                         ))
@@ -1837,29 +1775,41 @@ Por favor, confírmenme la emisión del comprobante.`;
                 </div>
 
                 <div className="foot">
-                    <div className="row">
-                        <span>Subtotal</span>
-                        <b>S/ {subtotal.toFixed(2)}</b>
-                    </div>
-
-                    <div className="row">
-                        <span>IGV 18%</span>
-                        <b>S/ {igv.toFixed(2)}</b>
-                    </div>
-
                     <div className="row total">
-                        <span>Total</span>
-                        <b>S/ {total.toFixed(2)}</b>
+                        <span>Productos seleccionados</span>
+                        <b>{cantidadTotal}</b>
                     </div>
 
-                    <a
-                        className="checkout"
-                        href={whatsappCotizacion}
-                        target="_blank"
-                        rel="noreferrer"
+                    <p
+                        style={{
+                            margin: "12px 0",
+                            fontSize: "0.85rem",
+                            lineHeight: 1.5,
+                            color: "#64748b",
+                        }}
                     >
-                        Solicitar cotización
-                    </a>
+                        INGEDATA preparará una proforma personalizada con precios,
+                        disponibilidad y condiciones comerciales.
+                    </p>
+
+                    {itemsCarrito.length > 0 ? (
+                        <a
+                            className="checkout"
+                            href={whatsappCotizacion}
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            Solicitar proforma por WhatsApp
+                        </a>
+                    ) : (
+                        <button
+                            className="checkout"
+                            type="button"
+                            onClick={() => setCarritoAbierto(false)}
+                        >
+                            Seleccionar productos
+                        </button>
+                    )}
                 </div>
             </aside>
 
