@@ -32,7 +32,7 @@ const DATOS_BANCARIOS = {
     cuentaDetraccion: "00059194461",
 };
 
-const FALLBACK_LOGO = "/imagenes/logo ingedata.jpeg";
+const FALLBACK_LOGO = "/imagenes/logo-ingedata-nuevo.jpeg";
 
 function img(nombre) {
     return `/imagenes/${nombre}`;
@@ -1635,7 +1635,7 @@ Por favor, confírmenme la emisión del comprobante.`;
                             <span className="mark mark-completo">
                                 <ImagenRecurso
                                     imagenes={[
-                                        img("logo ingedata.jpeg"),
+                                        img("logo-ingedata-nuevo.jpeg"),
                                     ]}
                                     alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
                                 />
