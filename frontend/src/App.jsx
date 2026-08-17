@@ -1,7 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_PRODUCTOS = "https://ingedata-backend.onrender.com/productos";
+const API_BASE_URL = (
+    import.meta.env.VITE_API_URL || "https://ingedata-backend-b3rt.onrender.com"
+).replace(/\/+$/, "");
+
+const API_PRODUCTOS = `${API_BASE_URL}/productos`;
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
@@ -46,175 +50,341 @@ function normalizarTexto(valor = "") {
 
 function obtenerImagenesProducto(producto) {
     const nombre = normalizarTexto(producto?.nombre);
+    const brand = normalizarTexto(producto?.brand || producto?.marca || "");
 
-    // Fibra óptica
+    const archivo = (...nombres) => nombres.map((nombreArchivo) => img(nombreArchivo));
+
+    // =========================================================
+    // CABLEADO ESTRUCTURADO
+    // =========================================================
+
+    if (nombre.includes("cable utp") && nombre.includes("cat 6a") && nombre.includes("panduit")) {
+        return archivo("cable utp 6a panduit.jpg");
+    }
+
+    if (nombre.includes("cable utp") && nombre.includes("cat 6a") && nombre.includes("commscope")) {
+        return archivo("cable utp 6a commscope.jpg");
+    }
+
+    if (nombre.includes("cable utp") && nombre.includes("cat 6") && nombre.includes("panduit")) {
+        return archivo("cable utp 6 panduit.jpg");
+    }
+
+    if (nombre.includes("cable utp") && nombre.includes("cat 6") && nombre.includes("commscope")) {
+        return archivo("cable utp 6 commscope.jpg");
+    }
+
+    // Respaldo por marca por si el nombre del producto cambia ligeramente.
+    if (nombre.includes("cable utp") && nombre.includes("6a") && brand.includes("panduit")) {
+        return archivo("cable utp 6a panduit.jpg");
+    }
+
+    if (nombre.includes("cable utp") && nombre.includes("6a") && brand.includes("commscope")) {
+        return archivo("cable utp 6a commscope.jpg");
+    }
+
+    if (nombre.includes("cable utp") && brand.includes("panduit")) {
+        return archivo("cable utp 6 panduit.jpg");
+    }
+
+    if (nombre.includes("cable utp") && brand.includes("commscope")) {
+        return archivo("cable utp 6 commscope.jpg");
+    }
+
+    if (nombre.includes("jack") && nombre.includes("cat 6a")) {
+        return archivo("jack 6a.jpg");
+    }
+
+    if (nombre.includes("jack") && nombre.includes("cat 6")) {
+        return archivo("jack 6.jpg");
+    }
+
+    if (nombre.includes("face plate") || nombre.includes("faceplate")) {
+        return archivo("face plate.jpg");
+    }
+
+    if (nombre.includes("tapa ciega")) {
+        return archivo("tapa ciega data.jpg");
+    }
+
+    if (nombre.includes("patch panel") || nombre.includes("patch-panel")) {
+        return archivo("Patch-Panel 24 partes.jpg");
+    }
+
+    if (
+        (nombre.includes("patch cord") || nombre.includes("patchcord")) &&
+        !nombre.includes("fibra")
+    ) {
+        return archivo("pashcord.jpg");
+    }
+
+    if (nombre.includes("gabinete rack") && nombre.includes("12u")) {
+        return archivo("Gabinete rack 19 pulgadas 12U de pared.jpg");
+    }
+
+    // =========================================================
+    // FIBRA ÓPTICA
+    // =========================================================
+
     if (nombre.includes("fibra optica monomodo")) {
-        return ["/imagenes/Fibra óptica monomodo 12 hilos por metro.png"];
+        return archivo("Fibra óptica monomodo 12 hilos por metro.png");
     }
 
     if (nombre.includes("fibra optica multimodo")) {
-        // Imagen referencial hasta que se agregue una foto específica de multimodo.
-        return ["/imagenes/Fibra óptica monomodo 12 hilos por metro.png"];
+        // Imagen referencial mientras no exista una imagen exclusiva de multimodo.
+        return archivo("Fibra óptica monomodo 12 hilos por metro.png");
     }
 
-    // Cables NH-90
-    if (nombre.includes("nh-90") && nombre.includes("2.5 mm")) {
-        return ["/imagenes/cable electrico amarillo indeco.jpg"];
+    if (nombre.includes("bandeja") && nombre.includes("empalme")) {
+        return archivo("bandeja de empalme 24 puertos.jpg");
     }
 
-    if (nombre.includes("nh-90") && nombre.includes("4 mm")) {
-        return ["/imagenes/cable electrico blanco indeco.jpg"];
+    if (
+        nombre.includes("patch cord") &&
+        nombre.includes("fibra") &&
+        nombre.includes("lc")
+    ) {
+        return archivo("Patch cord fibra LC-LC dúplex 3 m.jpg");
     }
 
-    if (nombre.includes("nh-90") && nombre.includes("6 mm")) {
-        return ["/imagenes/cable electrico indeco.jpg"];
+    if (nombre.includes("pigtail") && nombre.includes("om3")) {
+        return archivo("Pigtail LC OM3 pack x12.jpg");
     }
 
-    if (nombre.includes("nh-90") && nombre.includes("10 mm")) {
-        return ["/imagenes/cable electrico 10mm.jpg"];
+    if (nombre.includes("certificacion") && nombre.includes("fluke")) {
+        return archivo("Certificación de cableado con FLUKE DSX-5000 por punto.jpg");
     }
 
-    if (nombre.includes("nh-90") && nombre.includes("16 mm")) {
-        return ["/imagenes/16 NH-90mm indeco.jpg"];
+    // =========================================================
+    // CABLES ELÉCTRICOS NH-90
+    // =========================================================
+
+    if (nombre.includes("nh-90")) {
+        const matchCalibre = nombre.match(/(\d+(?:\.\d+)?)\s*mm/);
+        const calibre = matchCalibre?.[1] || "";
+
+        if (calibre === "35") {
+            return archivo("35mm nh-90 indeco.jpg");
+        }
+
+        if (calibre === "25") {
+            return archivo("25mm nh-90 indeco.jpg");
+        }
+
+        if (calibre === "16") {
+            return archivo("16 NH-90mm indeco.jpg");
+        }
+
+        if (calibre === "10") {
+            return archivo("cable electrico 10mm.jpg");
+        }
+
+        if (calibre === "6") {
+            return archivo("cable electrico indeco.jpg");
+        }
+
+        if (calibre === "4") {
+            return archivo("cable electrico blanco indeco.jpg");
+        }
+
+        if (calibre === "2.5") {
+            return archivo("cable electrico amarillo indeco.jpg");
+        }
     }
 
-    if (nombre.includes("nh-90") && nombre.includes("25 mm")) {
-        return ["/imagenes/25mm nh-90 indeco.jpg"];
-    }
+    // =========================================================
+    // CABLES ELÉCTRICOS N2XOH
+    // =========================================================
 
-    if (nombre.includes("nh-90") && nombre.includes("35 mm")) {
-        return ["/imagenes/35mm nh-90 indeco.jpg"];
-    }
-
-    // Cables N2XOH
-    // Usamos una imagen referencial N2XOH que está comprobado que existe
-    // en public/imagenes. Así evitamos que aparezca el logo de fallback.
     if (nombre.includes("n2xoh")) {
-        return ["/imagenes/16mm N2XOH indeco.jpg"];
+        const matchCalibre = nombre.match(/(\d+(?:\.\d+)?)\s*mm/);
+        const calibre = matchCalibre?.[1] || "";
+
+        if (calibre === "35") {
+            return archivo(
+                "35 N2XOHmm indeco.jpg",
+                "16mm N2XOH indeco.jpg"
+            );
+        }
+
+        if (calibre === "25") {
+            return archivo(
+                "25 N2XOH mm indeco.jpg",
+                "16mm N2XOH indeco.jpg"
+            );
+        }
+
+        // Para 4, 6, 10 y 16 se usa una foto referencial N2XOH
+        // que existe físicamente en public/imagenes.
+        return archivo("16mm N2XOH indeco.jpg");
     }
 
-    // Otros cables eléctricos existentes
+    // =========================================================
+    // OTROS CABLES / PRODUCTOS ELÉCTRICOS
+    // =========================================================
+
     if (nombre.includes("cable electrico amarillo")) {
-        return ["/imagenes/cable electrico amarillo indeco.jpg"];
+        return archivo("cable electrico amarillo indeco.jpg");
     }
 
     if (nombre.includes("cable electrico blanco")) {
-        return ["/imagenes/cable electrico blanco indeco.jpg"];
+        return archivo("cable electrico blanco indeco.jpg");
     }
 
-    if (nombre === "cable electrico indeco") {
-        return ["/imagenes/cable electrico indeco.jpg"];
+    if (nombre.includes("cable electrico indeco")) {
+        return archivo("cable electrico indeco.jpg");
     }
 
-    // Tomas y accesorios eléctricos
     if (nombre.includes("schuko")) {
-        return ["/imagenes/toma schuko.jpg"];
+        return archivo("toma schuko.jpg");
     }
 
     if (nombre.includes("industrial") && nombre.includes("32a")) {
-        return ["/imagenes/Tomacorriente industrial 32A.jpg"];
+        return archivo("Tomacorriente industrial 32A.jpg");
     }
 
     if (nombre.includes("tomas comerciales")) {
-        return ["/imagenes/tomas comerciales.jpg"];
+        return archivo("tomas comerciales.jpg");
     }
 
     if (nombre.includes("tomas estabilizadas")) {
-        return ["/imagenes/tomas estabilizadas.jpg"];
+        return archivo("tomas estabilizadas.jpg");
     }
 
     if (nombre.includes("interruptor termomagnetico")) {
-        return ["/imagenes/Interruptor termomagnético 2x32A.jpg"];
+        return archivo("Interruptor termomagnético 2x32A.jpg");
     }
 
     if (nombre.includes("tablero de distribucion")) {
-        return ["/imagenes/Tablero de distribución 12 polos.png"];
+        return archivo("Tablero de distribución 12 polos.png");
     }
 
     if (nombre.includes("tuberia emt")) {
-        return ["/imagenes/Tubería EMT.jpg"];
+        return archivo("Tubería EMT.jpg");
     }
 
-    // Energía
-    if (nombre.includes("ups apc 1500va")) {
-        return ["/imagenes/UPS APC 1500VA línea interactiva.jpg"];
+    if (nombre.includes("pozo a tierra") && nombre.includes("kit")) {
+        return archivo("Kit pozo a tierra varilla + dosis química.png");
     }
 
-    if (nombre.includes("ups on-line 3000va")) {
-        return ["/imagenes/UPS On-line 3000VA rack.jpg"];
+    if (nombre.includes("instalacion") && nombre.includes("pozo a tierra")) {
+        return archivo("Instalación de pozo a tierra incluye medición.jpg");
+    }
+
+    // =========================================================
+    // ENERGÍA
+    // =========================================================
+
+    if (nombre.includes("ups apc") && nombre.includes("1500va")) {
+        return archivo("UPS APC 1500VA línea interactiva.jpg");
+    }
+
+    if (
+        (nombre.includes("ups on-line") || nombre.includes("ups online")) &&
+        nombre.includes("3000va")
+    ) {
+        return archivo("UPS On-line 3000VA rack.jpg");
     }
 
     if (nombre.includes("banco de baterias")) {
-        return ["/imagenes/Banco de baterías externo para UPS.jpg"];
+        return archivo("Banco de baterías externo para UPS.jpg");
     }
 
     if (nombre.includes("grupo electrogeno")) {
-        return ["/imagenes/Grupo electrógeno 6.5 kW a gasolina.jpg"];
+        return archivo("Grupo electrógeno 6.5 kW a gasolina.jpg");
     }
 
     if (nombre.includes("transformador de aislamiento")) {
-        return ["/imagenes/Transformador de aislamiento 5 kVA.jpg"];
+        return archivo("Transformador de aislamiento 5 kVA.jpg");
     }
 
-    // Melamina
-    if (nombre.includes("escritorios") && nombre.includes("estaciones")) {
-        return ["/imagenes/escritorio melamina.webp"];
+    if (nombre.includes("mantenimiento") && nombre.includes("ups")) {
+        return archivo("Mantenimiento preventivo de UPS.png");
     }
 
-    if (nombre.includes("muebles de oficina")) {
-        return ["/imagenes/Fabricación de mobiliario en melamina por m².png"];
+    // =========================================================
+    // MELAMINA
+    // =========================================================
+
+    if (
+        nombre.includes("escritorio") ||
+        (nombre.includes("estacion") && nombre.includes("trabajo"))
+    ) {
+        return archivo("escritorio melamina.webp");
     }
 
-    if (nombre.includes("gabinetes") && nombre.includes("almacenamiento")) {
-        return ["/imagenes/gabinetes de almacenamiento melamine.png"];
+    if (
+        nombre.includes("muebles de oficina") ||
+        nombre.includes("fabricacion de mobiliario")
+    ) {
+        return archivo("Fabricación de mobiliario en melamina por m².png");
+    }
+
+    if (nombre.includes("gabinete") && nombre.includes("almacenamiento")) {
+        return archivo("gabinetes de almacenamiento melamine.png");
     }
 
     if (nombre.includes("recepcion")) {
-        return ["/imagenes/muebles de recepcion melamine.jpg"];
+        return archivo("muebles de recepcion melamine.jpg");
     }
 
     if (nombre.includes("kitchenette") || nombre.includes("mueble de cocina")) {
-        return ["/imagenes/mueble de cocina melamine.jpg"];
+        return archivo("mueble de cocina melamine.jpg");
     }
 
     if (nombre.includes("mobiliario personalizado")) {
-        return ["/imagenes/mobiliario personalizado melamine.jpg"];
+        return archivo("mobiliario personalizado melamine.jpg");
     }
 
-    // Estructuras metálicas
-    if (nombre.includes("coberturas metalicas")) {
-        return ["/imagenes/coberturas metalicas.jpg"];
+    // =========================================================
+    // ESTRUCTURAS METÁLICAS
+    // =========================================================
+
+    if (nombre.includes("cobertura") && nombre.includes("metalica")) {
+        return archivo("coberturas metalicas.jpg");
     }
 
-    if (nombre.includes("escaleras metalicas")) {
-        return ["/imagenes/escaleras metalicas.jpg"];
+    if (nombre.includes("escalera") && nombre.includes("metalica")) {
+        return archivo("escaleras metalicas.jpg");
     }
 
-    if (nombre.includes("barandas metalicas")) {
-        return ["/imagenes/barandas metalicas.jpg"];
+    if (nombre.includes("baranda") && nombre.includes("metalica")) {
+        return archivo("barandas metalicas.jpg");
     }
 
-    if (nombre.includes("mesas") && nombre.includes("metalicas")) {
-        return ["/imagenes/mesas metalicas.jpg"];
+    if (nombre.includes("mesa") && nombre.includes("metalica")) {
+        return archivo("mesas metalicas.jpg");
     }
 
-    if (nombre.includes("estructuras metalicas personalizadas")) {
-        return ["/imagenes/estructuras metalicas personalizadas.jpg"];
+    if (nombre.includes("estructura") && nombre.includes("metalica")) {
+        return archivo("estructuras metalicas personalizadas.jpg");
     }
 
-    // Servicios de fibra óptica
+    // =========================================================
+    // SERVICIOS
+    // =========================================================
+
     if (nombre.includes("fibra optica") && nombre.includes("planta interna")) {
-        return ["/imagenes/cableado fibra optica parte interna.png"];
+        return archivo("cableado fibra optica parte interna.png");
     }
 
     if (nombre.includes("fibra optica") && nombre.includes("planta externa")) {
-        return [
-            "/imagenes/cableado fibra optica parte externa .png",
-            "/imagenes/cableado fibra optica parte externa.png",
-        ];
+        // En tu carpeta existe una versión con espacio antes de ".png".
+        // Dejamos también una segunda ruta por compatibilidad.
+        return archivo(
+            "cableado fibra optica parte externa .png",
+            "cableado fibra optica parte externa.png"
+        );
     }
 
-    // Si no existe una regla especial, se usa lo que entrega el backend.
+    if (nombre.includes("cctv")) {
+        return archivo("Instalación y configuración de CCTV por cámara.jpg");
+    }
+
+    // =========================================================
+    // RESPALDO DEL BACKEND
+    // =========================================================
+
     if (Array.isArray(producto?.imagenes) && producto.imagenes.length > 0) {
         return producto.imagenes;
     }
@@ -229,6 +399,7 @@ function obtenerImagenesProducto(producto) {
 
     return [FALLBACK_LOGO];
 }
+
 
 function ImagenRecurso({ imagenes, alt, className }) {
     const lista =
@@ -880,7 +1051,7 @@ Por favor, confírmenme la emisión del comprobante.`;
                         <div className="loading-products error-products">
                             {errorProductos}
                             <br />
-                            Verifica que el backend esté encendido en http://localhost:3000/productos
+                            No se pudo conectar con el catálogo en línea. Intenta nuevamente en unos segundos.
                         </div>
                     ) : (
                         <div className="grid">
@@ -896,11 +1067,11 @@ Por favor, confírmenme la emisión del comprobante.`;
                                                 {p.tag && (
                                                     <span
                                                         className={`chip ${p.tag === "Servicio" ||
-                                                                p.tag === "Cotizar"
-                                                                ? "svc"
-                                                                : p.tag === "Kit"
-                                                                    ? "green"
-                                                                    : "gold"
+                                                            p.tag === "Cotizar"
+                                                            ? "svc"
+                                                            : p.tag === "Kit"
+                                                                ? "green"
+                                                                : "gold"
                                                             }`}
                                                     >
                                                         {p.tag}
