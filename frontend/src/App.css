@@ -2476,3 +2476,174 @@ footer h4 {
         gap: 7px;
     }
 }
+
+/* =========================================================
+   LOGO CORPORATIVO HORIZONTAL - INGEDATA
+   Versión grande para header y footer
+   ========================================================= */
+
+/* El header usa más ancho que el resto del contenido para que
+   el logo, menú y botones respiren correctamente en escritorio. */
+.head {
+    max-width: 1500px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    gap: 18px;
+}
+
+/* Contenedor principal del nuevo logo */
+.logo.logo-completo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex: 0 0 285px;
+    width: 285px;
+    height: 76px;
+    gap: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+    /* Se elimina por completo la apariencia de ícono cuadrado */
+    .logo.logo-completo .mark.mark-completo {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: hidden;
+        display: block;
+    }
+
+        /* IMPORTANTE:
+   El JPEG tiene bastante espacio blanco arriba y abajo.
+   object-fit: cover hace un recorte visual del espacio sobrante
+   para que INGEDATA se vea grande sin modificar la imagen física. */
+        .logo.logo-completo .mark.mark-completo img {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            object-fit: cover;
+            object-position: center 48%;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            transform: scale(1.02);
+        }
+
+    /* El nuevo JPEG ya incluye todo el nombre de la empresa */
+    .logo.logo-completo .txt {
+        display: none;
+    }
+
+/* Menú un poco más compacto para convivir con el logo grande */
+.mainnav {
+    margin-left: 0;
+    gap: 2px;
+}
+
+    .mainnav a {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+/* Logo del footer */
+footer .logo.logo-completo {
+    width: 310px;
+    height: 86px;
+    flex-basis: 310px;
+}
+
+    footer .logo.logo-completo .mark.mark-completo {
+        width: 100%;
+        height: 100%;
+    }
+
+/* =========================================================
+   RESPONSIVE DEL LOGO
+   ========================================================= */
+
+@media (max-width: 1320px) {
+    .head {
+        max-width: 1240px;
+        gap: 12px;
+    }
+
+    .logo.logo-completo {
+        width: 235px;
+        height: 66px;
+        flex-basis: 235px;
+    }
+
+    .mainnav a {
+        padding-left: 7px;
+        padding-right: 7px;
+        font-size: 0.78rem;
+    }
+
+    .actions {
+        gap: 7px;
+    }
+
+    .cart-btn {
+        padding-left: 13px;
+        padding-right: 13px;
+    }
+
+    .btn-quote {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+}
+
+@media (max-width: 1080px) {
+    .logo.logo-completo {
+        width: 205px;
+        height: 60px;
+        flex-basis: 205px;
+    }
+
+    .mainnav a {
+        padding-left: 6px;
+        padding-right: 6px;
+        font-size: 0.74rem;
+    }
+}
+
+@media (max-width: 900px) {
+    .logo.logo-completo {
+        width: 190px;
+        height: 56px;
+        flex-basis: 190px;
+    }
+
+    footer .logo.logo-completo {
+        width: 250px;
+        height: 72px;
+        flex-basis: 250px;
+    }
+}
+
+@media (max-width: 680px) {
+    .head {
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    .logo.logo-completo {
+        width: 165px;
+        height: 50px;
+        flex-basis: 165px;
+    }
+
+    footer .logo.logo-completo {
+        width: 220px;
+        height: 64px;
+        flex-basis: 220px;
+    }
+}
