@@ -690,7 +690,7 @@ Por favor, confírmenme la emisión del comprobante.`;
                         <span className="mark mark-completo">
                             <ImagenRecurso
                                 imagenes={[
-                                    img("logo ingedata.jpeg"),
+                                    img("logo-ingedata-nuevo.jpeg"),
                                 ]}
                                 alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
                             />
