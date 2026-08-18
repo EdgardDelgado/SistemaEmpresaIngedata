@@ -1,11 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_BASE_URL = (
-    import.meta.env.VITE_API_URL || "https://ingedata-backend-b3rt.onrender.com"
-).replace(/\/+$/, "");
+const API_BASE_URL = "http://localhost:3000";
 
 const API_PRODUCTOS = `${API_BASE_URL}/productos`;
+const API_SOLICITUDES_PROFORMA = `${API_BASE_URL}/solicitudes-proforma`;
+const API_ADMIN_LOGIN = `${API_BASE_URL}/admin/login`;
+const API_ADMIN_COTIZACIONES = `${API_BASE_URL}/admin/cotizaciones`;
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
@@ -401,7 +402,7 @@ function obtenerImagenesProducto(producto) {
 }
 
 
-function ImagenRecurso({ imagenes, alt, className }) {
+function ImagenRecurso({ imagenes, alt, className, style }) {
     const lista =
         Array.isArray(imagenes) && imagenes.length > 0
             ? imagenes
@@ -421,6 +422,7 @@ function ImagenRecurso({ imagenes, alt, className }) {
             src={rutas[index]}
             alt={alt}
             className={className}
+            style={style}
             onError={() => {
                 setIndex((actual) =>
                     actual < rutas.length - 1 ? actual + 1 : actual
@@ -442,6 +444,26 @@ const categorias = [
 ];
 
 function App() {
+    const esRutaAdmin = window.location.pathname.startsWith("/admin");
+
+    const [adminCorreo, setAdminCorreo] = useState("");
+    const [adminPassword, setAdminPassword] = useState("");
+
+    const [adminToken, setAdminToken] = useState(
+        localStorage.getItem("ingedata_admin_token") || ""
+    );
+
+    const [adminUsuario, setAdminUsuario] = useState(null);
+    const [adminError, setAdminError] = useState("");
+    const [adminCargando, setAdminCargando] = useState(false);
+    const [adminCotizaciones, setAdminCotizaciones] = useState([]);
+    const [adminCotizacionesCargando, setAdminCotizacionesCargando] = useState(false);
+    const [adminCotizacionesError, setAdminCotizacionesError] = useState("");
+    const [adminCotizacionSeleccionada, setAdminCotizacionSeleccionada] = useState(null);
+    const [adminDetalleCargando, setAdminDetalleCargando] = useState(false);
+    const [adminPrecios, setAdminPrecios] = useState({});
+    const [adminGuardandoCotizacion, setAdminGuardandoCotizacion] = useState(false);
+    const [adminCotizacionMensaje, setAdminCotizacionMensaje] = useState("");
     const [productos, setProductos] = useState([]);
     const [cargandoProductos, setCargandoProductos] = useState(true);
     const [errorProductos, setErrorProductos] = useState("");
@@ -464,6 +486,11 @@ function App() {
     });
 
     useEffect(() => {
+        if (esRutaAdmin) {
+            setCargandoProductos(false);
+            return;
+        }
+
         async function cargarProductos() {
             try {
                 setCargandoProductos(true);
@@ -493,7 +520,7 @@ function App() {
         }
 
         cargarProductos();
-    }, []);
+    }, [esRutaAdmin]);
 
     const lista = useMemo(() => {
         let data = productos.filter((p) => {
@@ -668,6 +695,780 @@ Por favor, confírmenme la emisión del comprobante.`;
             "noopener,noreferrer"
         );
     };
+    const cargarCotizacionesAdmin = async (tokenActual = adminToken) => {
+        if (!tokenActual) return;
+
+        try {
+            setAdminCotizacionesCargando(true);
+            setAdminCotizacionesError("");
+
+            const respuesta = await fetch(API_ADMIN_COTIZACIONES, {
+                headers: {
+                    Authorization: `Bearer ${tokenActual}`,
+                },
+            });
+
+            const data = await respuesta.json();
+
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                setAdminCotizaciones([]);
+                throw new Error(data.error || "Tu sesión expiró. Inicia sesión nuevamente.");
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(data.error || "No se pudieron cargar las cotizaciones");
+            }
+
+            setAdminCotizaciones(Array.isArray(data) ? data : []);
+        } catch (error) {
+            setAdminCotizacionesError(error.message);
+        } finally {
+            setAdminCotizacionesCargando(false);
+        }
+    };
+
+    const abrirDetalleCotizacionAdmin = async (id) => {
+        if (!adminToken) return;
+
+        try {
+            setAdminDetalleCargando(true);
+            setAdminError("");
+            setAdminCotizacionMensaje("");
+
+            const respuesta = await fetch(`${API_ADMIN_COTIZACIONES}/${id}`, {
+                headers: {
+                    Authorization: `Bearer ${adminToken}`,
+                },
+            });
+
+            const data = await respuesta.json();
+
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                setAdminCotizacionSeleccionada(null);
+                throw new Error(data.error || "Tu sesión expiró. Inicia sesión nuevamente.");
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(data.error || "No se pudo cargar el detalle");
+            }
+
+            const preciosIniciales = {};
+
+            (data.productos || []).forEach((producto) => {
+                preciosIniciales[producto.id] =
+                    producto.precio_unitario === null ||
+                        producto.precio_unitario === undefined
+                        ? ""
+                        : String(producto.precio_unitario);
+            });
+
+            setAdminPrecios(preciosIniciales);
+            setAdminCotizacionSeleccionada(data);
+        } catch (error) {
+            setAdminError(error.message);
+        } finally {
+            setAdminDetalleCargando(false);
+        }
+    };
+
+    const cambiarPrecioAdmin = (detalleId, valor) => {
+        const valorLimpio = String(valor)
+            .replace(",", ".")
+            .replace(/[^0-9.]/g, "");
+
+        const partes = valorLimpio.split(".");
+        const normalizado =
+            partes.length > 2
+                ? `${partes.shift()}.${partes.join("")}`
+                : valorLimpio;
+
+        setAdminPrecios((prev) => ({
+            ...prev,
+            [detalleId]: normalizado,
+        }));
+
+        setAdminCotizacionMensaje("");
+    };
+
+    const totalesAdmin = useMemo(() => {
+        const productosCotizacion = adminCotizacionSeleccionada?.productos || [];
+
+        if (productosCotizacion.length === 0) {
+            return {
+                subtotal: 0,
+                igv: 0,
+                total: 0,
+                completo: false,
+            };
+        }
+
+        let subtotal = 0;
+        let completo = true;
+
+        for (const producto of productosCotizacion) {
+            const valorPrecio = adminPrecios[producto.id];
+            const precio = Number(String(valorPrecio ?? "").replace(",", "."));
+            const cantidad = Number(producto.cantidad || 0);
+
+            if (
+                valorPrecio === "" ||
+                valorPrecio === null ||
+                valorPrecio === undefined ||
+                !Number.isFinite(precio) ||
+                precio <= 0 ||
+                !Number.isFinite(cantidad) ||
+                cantidad <= 0
+            ) {
+                completo = false;
+                continue;
+            }
+
+            subtotal += precio * cantidad;
+        }
+
+        subtotal = Number(subtotal.toFixed(2));
+        const igv = Number((subtotal * 0.18).toFixed(2));
+        const total = Number((subtotal + igv).toFixed(2));
+
+        return {
+            subtotal,
+            igv,
+            total,
+            completo,
+        };
+    }, [adminCotizacionSeleccionada, adminPrecios]);
+
+    const guardarCotizacionAdmin = async () => {
+        if (!adminToken || !adminCotizacionSeleccionada) return;
+
+        const productosCotizacion = adminCotizacionSeleccionada.productos || [];
+
+        if (productosCotizacion.length === 0) {
+            setAdminCotizacionMensaje("La cotización no contiene productos.");
+            return;
+        }
+
+        const productosPayload = [];
+
+        for (const producto of productosCotizacion) {
+            const precio = Number(adminPrecios[producto.id]);
+
+            if (!Number.isFinite(precio) || precio <= 0) {
+                setAdminCotizacionMensaje(
+                    `Ingresa un precio válido mayor a 0 para: ${producto.nombre}`
+                );
+                return;
+            }
+
+            productosPayload.push({
+                detalle_id: producto.id,
+                precio_unitario: Number(precio.toFixed(2)),
+            });
+        }
+
+        try {
+            setAdminGuardandoCotizacion(true);
+            setAdminCotizacionMensaje("");
+
+            const respuesta = await fetch(
+                `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/cotizar`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${adminToken}`,
+                    },
+                    body: JSON.stringify({
+                        productos: productosPayload,
+                    }),
+                }
+            );
+
+            const data = await respuesta.json();
+
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                setAdminCotizacionSeleccionada(null);
+                throw new Error(data.error || "Tu sesión expiró. Inicia sesión nuevamente.");
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(data.error || "No se pudo guardar la cotización");
+            }
+
+            await cargarCotizacionesAdmin(adminToken);
+            await abrirDetalleCotizacionAdmin(adminCotizacionSeleccionada.id);
+            setAdminCotizacionMensaje("Cotización guardada correctamente.");
+        } catch (error) {
+            setAdminCotizacionMensaje(error.message);
+        } finally {
+            setAdminGuardandoCotizacion(false);
+        }
+    };
+    const cambiarEstadoCotizacionAdmin = async (nuevoEstado) => {
+        if (!adminToken || !adminCotizacionSeleccionada) return;
+
+        try {
+            setAdminGuardandoCotizacion(true);
+            setAdminCotizacionMensaje("");
+
+            const respuesta = await fetch(
+                `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/estado`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${adminToken}`,
+                    },
+                    body: JSON.stringify({
+                        estado: nuevoEstado,
+                    }),
+                }
+            );
+
+            const data = await respuesta.json();
+
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                setAdminCotizacionSeleccionada(null);
+
+                throw new Error(
+                    data.error || "Tu sesión expiró. Inicia sesión nuevamente."
+                );
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(
+                    data.error || "No se pudo actualizar el estado de la cotización"
+                );
+            }
+
+            await cargarCotizacionesAdmin(adminToken);
+            await abrirDetalleCotizacionAdmin(adminCotizacionSeleccionada.id);
+
+            setAdminCotizacionMensaje(
+                nuevoEstado === "APROBADA"
+                    ? "Cotización aprobada correctamente."
+                    : "Cotización rechazada correctamente."
+            );
+        } catch (error) {
+            setAdminCotizacionMensaje(error.message);
+        } finally {
+            setAdminGuardandoCotizacion(false);
+        }
+    };
+
+    const iniciarSesionAdmin = async (e) => {
+        e.preventDefault();
+
+        try {
+            setAdminCargando(true);
+            setAdminError("");
+
+            const respuesta = await fetch(API_ADMIN_LOGIN, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    correo: adminCorreo.trim(),
+                    password: adminPassword,
+                }),
+            });
+
+            const data = await respuesta.json();
+
+            if (!respuesta.ok) {
+                throw new Error(data.error || "No se pudo iniciar sesión");
+            }
+
+            localStorage.setItem("ingedata_admin_token", data.token);
+            setAdminToken(data.token);
+            setAdminUsuario(data.administrador);
+            setAdminPassword("");
+            await cargarCotizacionesAdmin(data.token);
+        } catch (error) {
+            setAdminError(error.message);
+        } finally {
+            setAdminCargando(false);
+        }
+    };
+
+    const cerrarSesionAdmin = () => {
+        localStorage.removeItem("ingedata_admin_token");
+        setAdminToken("");
+        setAdminUsuario(null);
+        setAdminCotizaciones([]);
+        setAdminCotizacionSeleccionada(null);
+        setAdminPrecios({});
+        setAdminCotizacionMensaje("");
+        setAdminError("");
+        setAdminCotizacionesError("");
+    };
+
+    useEffect(() => {
+        if (esRutaAdmin && adminToken) {
+            cargarCotizacionesAdmin(adminToken);
+        }
+    }, [esRutaAdmin, adminToken]);
+    if (esRutaAdmin) {
+        const pendientes = adminCotizaciones.filter(
+            (c) => String(c.estado || "").toUpperCase() === "PENDIENTE"
+        ).length;
+
+        const personas = adminCotizaciones.filter(
+            (c) => c.cliente?.tipo_cliente === "PERSONA"
+        ).length;
+
+        const empresas = adminCotizaciones.filter(
+            (c) => c.cliente?.tipo_cliente === "EMPRESA"
+        ).length;
+
+        const cotizadas = adminCotizaciones.filter(
+            (c) => String(c.estado || "").toUpperCase() === "COTIZADA"
+        ).length;
+
+        const estilos = {
+            pagina: { minHeight: "100vh", background: "#f4f7fb", color: "#10233f", fontFamily: "Arial, sans-serif" },
+            loginPagina: { minHeight: "100vh", display: "grid", placeItems: "center", padding: "28px", background: "linear-gradient(135deg,#071a34 0%,#0c2d57 55%,#0e4f9d 100%)" },
+            loginCard: { width: "min(440px, 100%)", background: "#fff", borderRadius: "24px", padding: "34px", boxShadow: "0 28px 70px rgba(0,0,0,.28)" },
+            logoLogin: { width: "230px", maxWidth: "100%", height: "72px", objectFit: "contain", display: "block", margin: "0 auto 22px" },
+            etiqueta: { display: "block", fontSize: "13px", fontWeight: 800, marginBottom: "7px", color: "#334155" },
+            input: { width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "13px 14px", fontSize: "15px", outline: "none" },
+            botonAzul: { border: 0, borderRadius: "10px", padding: "10px 14px", fontWeight: 800, cursor: "pointer", background: "#1473e6", color: "#fff" },
+            sidebar: { width: "250px", background: "#081d38", color: "#fff", minHeight: "100vh", padding: "24px 18px", boxSizing: "border-box" },
+            contenido: { flex: 1, padding: "30px", minWidth: 0 },
+            tarjeta: { background: "#fff", borderRadius: "16px", boxShadow: "0 8px 24px rgba(15,23,42,.07)", border: "1px solid #e7edf5" },
+            stat: { background: "#fff", borderRadius: "16px", padding: "20px", boxShadow: "0 8px 24px rgba(15,23,42,.06)", border: "1px solid #e7edf5" },
+            navItem: { display: "flex", gap: "10px", alignItems: "center", width: "100%", padding: "12px 13px", border: 0, borderRadius: "10px", background: "rgba(255,255,255,.08)", color: "#fff", fontWeight: 700, textAlign: "left", marginBottom: "8px", cursor: "pointer" },
+            badge: { display: "inline-flex", padding: "5px 10px", borderRadius: "999px", background: "#fff7d6", color: "#8a6500", fontSize: "12px", fontWeight: 800 },
+            precioInput: { width: "120px", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "9px", padding: "9px 10px", fontSize: "14px", outline: "none" },
+            resumenTotal: { display: "grid", gridTemplateColumns: "1fr auto", gap: "8px 22px", marginLeft: "auto", width: "min(340px, 100%)", padding: "18px", background: "#f8fafc", border: "1px solid #e7edf5", borderRadius: "14px" },
+        };
+
+        if (!adminToken) {
+            return (
+                <div style={estilos.loginPagina}>
+                    <div style={estilos.loginCard}>
+                        <ImagenRecurso
+                            imagenes={[img("logo-ingedata-nuevo.jpeg")]}
+                            alt="INGEDATA"
+                            style={estilos.logoLogin}
+                        />
+
+                        <div style={{ textAlign: "center", marginBottom: "26px" }}>
+                            <div style={{ color: "#1473e6", fontWeight: 900, letterSpacing: "1.5px", fontSize: "12px", marginBottom: "8px" }}>
+                                PANEL ADMINISTRATIVO
+                            </div>
+                            <h1 style={{ margin: "0 0 8px", fontSize: "28px" }}>Iniciar sesión</h1>
+                            <p style={{ margin: 0, color: "#64748b", lineHeight: 1.55 }}>
+                                Acceso exclusivo para la administración de INGEDATA.
+                            </p>
+                        </div>
+
+                        <form onSubmit={iniciarSesionAdmin}>
+                            <div style={{ marginBottom: "16px" }}>
+                                <label style={estilos.etiqueta}>Correo electrónico</label>
+                                <input
+                                    style={estilos.input}
+                                    type="email"
+                                    placeholder="admin@ingedata.com"
+                                    value={adminCorreo}
+                                    onChange={(e) => setAdminCorreo(e.target.value)}
+                                    autoComplete="username"
+                                    required
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: "18px" }}>
+                                <label style={estilos.etiqueta}>Contraseña</label>
+                                <input
+                                    style={estilos.input}
+                                    type="password"
+                                    placeholder="Ingresa tu contraseña"
+                                    value={adminPassword}
+                                    onChange={(e) => setAdminPassword(e.target.value)}
+                                    autoComplete="current-password"
+                                    required
+                                />
+                            </div>
+
+                            {adminError && (
+                                <div style={{ padding: "11px 13px", marginBottom: "15px", borderRadius: "10px", background: "#fff1f2", color: "#be123c", fontSize: "13px", fontWeight: 700 }}>
+                                    {adminError}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={adminCargando}
+                                style={{ ...estilos.botonAzul, width: "100%", padding: "14px 16px", opacity: adminCargando ? 0.7 : 1 }}
+                            >
+                                {adminCargando ? "Ingresando..." : "Iniciar sesión"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div style={estilos.pagina}>
+                <div style={{ display: "flex", minHeight: "100vh" }}>
+                    <aside style={estilos.sidebar}>
+                        <ImagenRecurso
+                            imagenes={[img("logo-ingedata-nuevo.jpeg")]}
+                            alt="INGEDATA"
+                            style={{ width: "190px", height: "62px", objectFit: "contain", background: "#fff", borderRadius: "12px", padding: "6px", boxSizing: "border-box", marginBottom: "26px" }}
+                        />
+
+                        <div style={{ fontSize: "11px", letterSpacing: "1.5px", color: "#7fa7d3", margin: "0 8px 12px", fontWeight: 800 }}>ADMINISTRACIÓN</div>
+                        <button type="button" style={estilos.navItem}>📊 Dashboard</button>
+                        <button type="button" style={estilos.navItem}>📋 Cotizaciones</button>
+                        <button type="button" style={{ ...estilos.navItem, marginTop: "28px", background: "rgba(255,255,255,.04)" }} onClick={cerrarSesionAdmin}>🚪 Cerrar sesión</button>
+                    </aside>
+
+                    <main style={estilos.contenido}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "center", marginBottom: "26px", flexWrap: "wrap" }}>
+                            <div>
+                                <div style={{ color: "#1473e6", fontSize: "12px", letterSpacing: "1.4px", fontWeight: 900 }}>PANEL ADMINISTRATIVO</div>
+                                <h1 style={{ margin: "6px 0 4px", fontSize: "30px" }}>Solicitudes de cotización</h1>
+                                <p style={{ margin: 0, color: "#64748b" }}>Revisa las solicitudes registradas desde la web.</p>
+                            </div>
+                            <div style={{ ...estilos.tarjeta, padding: "12px 16px", fontSize: "13px" }}>
+                                <div style={{ fontWeight: 800 }}>{adminUsuario?.nombre || "Administrador INGEDATA"}</div>
+                                <div style={{ color: "#64748b" }}>{adminUsuario?.correo || "Sesión activa"}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total solicitudes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminCotizaciones.length}</div></div>
+                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pendientes}</div></div>
+                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Personas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{personas}</div></div>
+                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Empresas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{empresas}</div></div>
+                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cotizadas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{cotizadas}</div></div>
+                        </div>
+
+                        {adminCotizacionesError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminCotizacionesError}</div>}
+
+                        <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
+                            <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
+                                <div><h2 style={{ margin: 0, fontSize: "19px" }}>Cotizaciones</h2><small style={{ color: "#64748b" }}>Personas y empresas</small></div>
+                                <button type="button" style={estilos.botonAzul} onClick={() => cargarCotizacionesAdmin()} disabled={adminCotizacionesCargando}>{adminCotizacionesCargando ? "Actualizando..." : "↻ Actualizar"}</button>
+                            </div>
+
+                            {adminCotizacionesCargando && adminCotizaciones.length === 0 ? (
+                                <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Cargando cotizaciones...</div>
+                            ) : adminCotizaciones.length === 0 ? (
+                                <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>No hay solicitudes registradas.</div>
+                            ) : (
+                                <div style={{ overflowX: "auto" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "850px" }}>
+                                        <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Tipo", "Documento", "Productos", "Estado", "Fecha", "Acción"].map((t) => <th key={t} style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b", borderBottom: "1px solid #e7edf5" }}>{t}</th>)}</tr></thead>
+                                        <tbody>
+                                            {adminCotizaciones.map((c) => (
+                                                <tr key={c.id}>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", fontWeight: 800, whiteSpace: "nowrap" }}>{c.codigo}</td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><div style={{ fontWeight: 800 }}>{c.cliente?.nombre || "Sin nombre"}</div><small style={{ color: "#64748b" }}>{c.cliente?.correo || "Sin correo"}</small></td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.tipo_cliente || "-"}</td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.documento || "-"}</td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", textAlign: "center" }}>{c.cantidad_productos ?? 0}</td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><span
+                                                        style={{
+                                                            ...estilos.badge,
+                                                            background:
+                                                                String(c.estado || "").toUpperCase() === "APROBADA"
+                                                                    ? "#dcfce7"
+                                                                    : String(c.estado || "").toUpperCase() === "RECHAZADA"
+                                                                        ? "#ffe4e6"
+                                                                        : String(c.estado || "").toUpperCase() === "COTIZADA"
+                                                                            ? "#dbeafe"
+                                                                            : "#fff7d6",
+                                                            color:
+                                                                String(c.estado || "").toUpperCase() === "APROBADA"
+                                                                    ? "#166534"
+                                                                    : String(c.estado || "").toUpperCase() === "RECHAZADA"
+                                                                        ? "#be123c"
+                                                                        : String(c.estado || "").toUpperCase() === "COTIZADA"
+                                                                            ? "#1d4ed8"
+                                                                            : "#8a6500",
+                                                        }}
+                                                    >
+                                                        {c.estado || "PENDIENTE"}
+                                                    </span></td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{c.fecha_solicitud ? new Date(c.fecha_solicitud).toLocaleString("es-PE") : "-"}</td>
+                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetalleCotizacionAdmin(c.id)}>Ver</button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </section>
+                    </main>
+                </div>
+
+                {adminCotizacionSeleccionada && (
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: "20px" }} onClick={() => setAdminCotizacionSeleccionada(null)}>
+                        <div style={{ width: "min(850px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: "20px", boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e7edf5" }}>
+                                <div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DE SOLICITUD</small><h2 style={{ margin: "4px 0 0" }}>{adminCotizacionSeleccionada.codigo}</h2></div>
+                                <button type="button" onClick={() => setAdminCotizacionSeleccionada(null)} style={{ border: 0, background: "#eef2f7", width: "38px", height: "38px", borderRadius: "50%", cursor: "pointer", fontSize: "20px" }}>×</button>
+                            </div>
+                            <div style={{ padding: "22px" }}>
+                                {adminDetalleCargando ? <p>Cargando detalle...</p> : (
+                                    <>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "12px", marginBottom: "22px" }}>
+                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Cliente</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.razon_social : `${adminCotizacionSeleccionada.cliente?.nombres || ""} ${adminCotizacionSeleccionada.cliente?.apellidos || ""}`.trim()}</div></div>
+                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Documento</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.ruc : adminCotizacionSeleccionada.cliente?.dni}</div></div>
+                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Estado</small><div style={{ marginTop: "5px" }}><span
+                                                style={{
+                                                    ...estilos.badge,
+                                                    background:
+                                                        String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
+                                                            ? "#dcfce7"
+                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
+                                                                ? "#ffe4e6"
+                                                                : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                                    ? "#dbeafe"
+                                                                    : "#fff7d6",
+                                                    color:
+                                                        String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
+                                                            ? "#166534"
+                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
+                                                                ? "#be123c"
+                                                                : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                                    ? "#1d4ed8"
+                                                                    : "#8a6500",
+                                                }}
+                                            >
+                                                {adminCotizacionSeleccionada.estado}
+                                            </span></div></div>
+                                        </div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "10px", marginBottom: "22px", fontSize: "14px" }}>
+                                            <div><b>Teléfono:</b> {adminCotizacionSeleccionada.cliente?.telefono || "-"}</div>
+                                            <div><b>Correo:</b> {adminCotizacionSeleccionada.cliente?.correo || "-"}</div>
+                                            <div><b>Dirección:</b> {adminCotizacionSeleccionada.cliente?.direccion || "-"}</div>
+                                            <div><b>Fecha:</b> {adminCotizacionSeleccionada.fecha_solicitud ? new Date(adminCotizacionSeleccionada.fecha_solicitud).toLocaleString("es-PE") : "-"}</div>
+                                        </div>
+                                        <div style={{ padding: "14px 16px", background: "#f8fafc", borderRadius: "12px", marginBottom: "20px" }}><b>Observaciones</b><p style={{ margin: "6px 0 0", color: "#475569" }}>{adminCotizacionSeleccionada.observaciones || "Sin observaciones."}</p></div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "10px" }}>
+                                            <h3 style={{ margin: 0 }}>Productos solicitados</h3>
+                                            <small style={{ color: "#64748b" }}>
+                                                {["APROBADA", "RECHAZADA"].includes(
+                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                )
+                                                    ? "Cotización finalizada. Los precios ya no pueden modificarse."
+                                                    : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                        ? "Puedes modificar los precios y volver a guardar la cotización cuando sea necesario."
+                                                        : "Ingresa el precio unitario sin IGV. El sistema calculará el IGV 18 %."}
+                                            </small>
+                                        </div>
+
+                                        <div style={{ overflowX: "auto" }}>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
+                                                <thead>
+                                                    <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                                                        <th style={{ padding: "11px" }}>Producto</th>
+                                                        <th style={{ padding: "11px" }}>Marca</th>
+                                                        <th style={{ padding: "11px" }}>Cantidad</th>
+                                                        <th style={{ padding: "11px" }}>Precio unitario</th>
+                                                        <th style={{ padding: "11px" }}>Subtotal</th>
+                                                    </tr>
+                                                </thead>
+
+                                                <tbody>
+                                                    {(adminCotizacionSeleccionada.productos || []).map((p) => {
+                                                        const precio = Number(adminPrecios[p.id]);
+                                                        const precioValido = Number.isFinite(precio) && precio > 0;
+                                                        const subtotalVisual = precioValido
+                                                            ? Number((precio * Number(p.cantidad || 0)).toFixed(2))
+                                                            : 0;
+
+                                                        return (
+                                                            <tr key={p.id}>
+                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 700 }}>
+                                                                    {p.nombre}
+                                                                </td>
+                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                    {p.marca || "-"}
+                                                                </td>
+                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                    {p.cantidad}
+                                                                </td>
+                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                                                                        <span style={{ fontWeight: 800 }}>S/</span>
+                                                                        <input
+                                                                            type="text"
+                                                                            inputMode="decimal"
+                                                                            style={{
+                                                                                ...estilos.precioInput,
+                                                                                background: ["APROBADA", "RECHAZADA"].includes(
+                                                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                                )
+                                                                                    ? "#f1f5f9"
+                                                                                    : "#ffffff",
+                                                                                cursor: ["APROBADA", "RECHAZADA"].includes(
+                                                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                                )
+                                                                                    ? "not-allowed"
+                                                                                    : "text",
+                                                                            }}
+                                                                            placeholder="0.00"
+                                                                            value={adminPrecios[p.id] ?? ""}
+                                                                            onChange={(e) => cambiarPrecioAdmin(p.id, e.target.value)}
+                                                                            disabled={["APROBADA", "RECHAZADA"].includes(
+                                                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                            )}
+                                                                        />
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 800 }}>
+                                                                    {precioValido ? `S/ ${subtotalVisual.toFixed(2)}` : "Pendiente"}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "22px" }}>
+                                            <div style={estilos.resumenTotal}>
+                                                <span style={{ color: "#64748b" }}>Subtotal</span>
+                                                <b>S/ {totalesAdmin.subtotal.toFixed(2)}</b>
+                                                <span style={{ color: "#64748b" }}>IGV 18 %</span>
+                                                <b>S/ {totalesAdmin.igv.toFixed(2)}</b>
+                                                <span style={{ color: "#0f172a", fontSize: "17px", fontWeight: 900 }}>TOTAL</span>
+                                                <strong style={{ color: "#1473e6", fontSize: "20px" }}>
+                                                    S/ {totalesAdmin.total.toFixed(2)}
+                                                </strong>
+                                            </div>
+                                        </div>
+
+                                        {adminCotizacionMensaje && (
+                                            <div
+                                                style={{
+                                                    marginTop: "16px",
+                                                    padding: "12px 14px",
+                                                    borderRadius: "10px",
+                                                    background: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2",
+                                                    color: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c",
+                                                    fontWeight: 800,
+                                                    fontSize: "13px",
+                                                }}
+                                            >
+                                                {adminCotizacionMensaje}
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setAdminCotizacionSeleccionada(null);
+                                                    setAdminCotizacionMensaje("");
+                                                }}
+                                                style={{
+                                                    border: "1px solid #cbd5e1",
+                                                    borderRadius: "10px",
+                                                    padding: "12px 16px",
+                                                    background: "#fff",
+                                                    color: "#334155",
+                                                    fontWeight: 800,
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                Cerrar
+                                            </button>
+                                            {String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA" && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => cambiarEstadoCotizacionAdmin("RECHAZADA")}
+                                                        disabled={adminGuardandoCotizacion}
+                                                        style={{
+                                                            border: "1px solid #fecaca",
+                                                            borderRadius: "10px",
+                                                            padding: "12px 16px",
+                                                            background: "#fff1f2",
+                                                            color: "#be123c",
+                                                            fontWeight: 800,
+                                                            cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
+                                                            opacity: adminGuardandoCotizacion ? 0.6 : 1,
+                                                        }}
+                                                    >
+                                                        Rechazar
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => cambiarEstadoCotizacionAdmin("APROBADA")}
+                                                        disabled={adminGuardandoCotizacion}
+                                                        style={{
+                                                            border: "1px solid #bbf7d0",
+                                                            borderRadius: "10px",
+                                                            padding: "12px 16px",
+                                                            background: "#dcfce7",
+                                                            color: "#166534",
+                                                            fontWeight: 800,
+                                                            cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
+                                                            opacity: adminGuardandoCotizacion ? 0.6 : 1,
+                                                        }}
+                                                    >
+                                                        Aprobar
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {["PENDIENTE", "COTIZADA"].includes(
+                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                            ) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={guardarCotizacionAdmin}
+                                                        disabled={adminGuardandoCotizacion || !totalesAdmin.completo}
+                                                        style={{
+                                                            ...estilos.botonAzul,
+                                                            padding: "12px 18px",
+                                                            opacity:
+                                                                adminGuardandoCotizacion || !totalesAdmin.completo
+                                                                    ? 0.55
+                                                                    : 1,
+                                                            cursor:
+                                                                adminGuardandoCotizacion || !totalesAdmin.completo
+                                                                    ? "not-allowed"
+                                                                    : "pointer",
+                                                        }}
+                                                    >
+                                                        {adminGuardandoCotizacion
+                                                            ? "Guardando..."
+                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                                ? "Guardar cambios"
+                                                                : "Guardar cotización"}
+                                                    </button>
+                                                )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <>
