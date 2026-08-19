@@ -7,6 +7,7 @@ const API_PRODUCTOS = `${API_BASE_URL}/productos`;
 const API_SOLICITUDES_PROFORMA = `${API_BASE_URL}/solicitudes-proforma`;
 const API_ADMIN_LOGIN = `${API_BASE_URL}/admin/login`;
 const API_ADMIN_COTIZACIONES = `${API_BASE_URL}/admin/cotizaciones`;
+const API_ADMIN_PEDIDOS = `${API_BASE_URL}/admin/pedidos`;
 
 const WHATSAPP_1 = "51986916557";
 const WHATSAPP_2 = "51986913711";
@@ -399,8 +400,8 @@ function obtenerImagenesProducto(producto) {
     }
 
     return [FALLBACK_LOGO];
-}
 
+}
 
 function ImagenRecurso({ imagenes, alt, className, style }) {
     const lista =
@@ -430,6 +431,7 @@ function ImagenRecurso({ imagenes, alt, className, style }) {
             }}
         />
     );
+
 }
 
 const categorias = [
@@ -446,6 +448,48 @@ const categorias = [
 function App() {
     const esRutaAdmin = window.location.pathname.startsWith("/admin");
 
+    // Navegación interna robusta para la web pública.
+    // Evita recargas/pantallas en blanco al navegar a #inicio, #tienda, etc.
+    useEffect(() => {
+        if (esRutaAdmin) return;
+
+        const navegarASeccion = (id, actualizarUrl = true) => {
+            const destino = document.getElementById(id);
+            if (!destino) return;
+
+            if (actualizarUrl) {
+                window.history.replaceState(null, "", `#${id}`);
+            }
+
+            requestAnimationFrame(() => {
+                destino.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        };
+
+        const manejarClick = (event) => {
+            const enlace = event.target.closest('a[href^="#"]');
+            if (!enlace) return;
+
+            const href = enlace.getAttribute("href");
+            if (!href || href === "#") return;
+
+            const id = decodeURIComponent(href.slice(1));
+            if (!document.getElementById(id)) return;
+
+            event.preventDefault();
+            navegarASeccion(id);
+        };
+
+        document.addEventListener("click", manejarClick);
+
+        const hashInicial = window.location.hash.replace(/^#/, "");
+        if (hashInicial) {
+            setTimeout(() => navegarASeccion(decodeURIComponent(hashInicial), false), 100);
+        }
+
+        return () => document.removeEventListener("click", manejarClick);
+    }, [esRutaAdmin]);
+
     const [adminCorreo, setAdminCorreo] = useState("");
     const [adminPassword, setAdminPassword] = useState("");
 
@@ -460,6 +504,14 @@ function App() {
     const [adminCotizacionesCargando, setAdminCotizacionesCargando] = useState(false);
     const [adminCotizacionesError, setAdminCotizacionesError] = useState("");
     const [adminCotizacionSeleccionada, setAdminCotizacionSeleccionada] = useState(null);
+    const [adminSeccion, setAdminSeccion] = useState("dashboard");
+
+    const [adminPedidos, setAdminPedidos] = useState([]);
+    const [adminPedidosCargando, setAdminPedidosCargando] = useState(false);
+    const [adminPedidosError, setAdminPedidosError] = useState("");
+    const [adminPedidoSeleccionado, setAdminPedidoSeleccionado] = useState(null);
+    const [adminPedidoDetalleCargando, setAdminPedidoDetalleCargando] = useState(false);
+    const [adminPedidoMensaje, setAdminPedidoMensaje] = useState("");
     const [adminDetalleCargando, setAdminDetalleCargando] = useState(false);
     const [adminPrecios, setAdminPrecios] = useState({});
     const [adminGuardandoCotizacion, setAdminGuardandoCotizacion] = useState(false);
@@ -727,6 +779,121 @@ Por favor, confírmenme la emisión del comprobante.`;
             setAdminCotizacionesError(error.message);
         } finally {
             setAdminCotizacionesCargando(false);
+        }
+    };
+    const cargarPedidosAdmin = async (tokenActual = adminToken) => {
+        if (!tokenActual) return;
+
+        try {
+            setAdminPedidosCargando(true);
+            setAdminPedidosError("");
+
+            const respuesta = await fetch(
+                API_ADMIN_PEDIDOS,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${tokenActual}`,
+                    },
+                }
+            );
+
+            const data = await respuesta.json();
+
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+
+                setAdminToken("");
+                setAdminUsuario(null);
+                setAdminPedidos([]);
+
+                throw new Error(
+                    data.error ||
+                    "Tu sesión expiró. Inicia sesión nuevamente."
+                );
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(
+                    data.error ||
+                    "No se pudieron cargar los pedidos."
+                );
+            }
+
+            setAdminPedidos(
+                Array.isArray(data) ? data : []
+            );
+
+        } catch (error) {
+            console.error(
+                "Error al cargar pedidos:",
+                error
+            );
+
+            setAdminPedidosError(
+                error.message ||
+                "Error al cargar los pedidos."
+            );
+
+        } finally {
+            setAdminPedidosCargando(false);
+        }
+    };
+
+    const abrirDetallePedidoAdmin = async (id) => {
+        if (!adminToken) return;
+        try {
+            setAdminDetalleCargando(true);
+            setAdminPedidosError("");
+            setAdminPedidoMensaje("");
+            const respuesta = await fetch(`${API_ADMIN_PEDIDOS}/${id}`, {
+                headers: { Authorization: `Bearer ${adminToken}` },
+            });
+            const data = await respuesta.json();
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                throw new Error(data.error || "Tu sesión expiró. Inicia sesión nuevamente.");
+            }
+            if (!respuesta.ok) throw new Error(data.error || "No se pudo cargar el pedido.");
+            setAdminPedidoSeleccionado(data);
+        } catch (error) {
+            setAdminPedidosError(error.message || "Error al cargar el pedido.");
+        } finally {
+            setAdminDetalleCargando(false);
+        }
+    };
+
+    const cambiarEstadoPedidoAdmin = async (estado) => {
+        if (!adminToken || !adminPedidoSeleccionado?.id) return;
+        try {
+            setAdminGuardandoPedido(true);
+            setAdminPedidoMensaje("");
+            const respuesta = await fetch(`${API_ADMIN_PEDIDOS}/${adminPedidoSeleccionado.id}/estado`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${adminToken}`,
+                },
+                body: JSON.stringify({ estado }),
+            });
+            const data = await respuesta.json();
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                localStorage.removeItem("ingedata_admin_token");
+                setAdminToken("");
+                setAdminUsuario(null);
+                throw new Error(data.error || "Tu sesión expiró. Inicia sesión nuevamente.");
+            }
+            if (!respuesta.ok) throw new Error(data.error || "No se pudo actualizar el estado.");
+            const pedidoActualizado = data.pedido || { ...adminPedidoSeleccionado, estado };
+            setAdminPedidoSeleccionado((actual) => ({ ...actual, ...pedidoActualizado, estado: pedidoActualizado.estado || estado }));
+            setAdminPedidoMensaje(data.mensaje || "Estado del pedido actualizado correctamente.");
+            await cargarPedidosAdmin(adminToken);
+        } catch (error) {
+            setAdminPedidoMensaje(error.message || "Error al actualizar el pedido.");
+        } finally {
+            setAdminGuardandoPedido(false);
         }
     };
 
@@ -1019,6 +1186,7 @@ Por favor, confírmenme la emisión del comprobante.`;
     useEffect(() => {
         if (esRutaAdmin && adminToken) {
             cargarCotizacionesAdmin(adminToken);
+            cargarPedidosAdmin(adminToken);
         }
     }, [esRutaAdmin, adminToken]);
     if (esRutaAdmin) {
@@ -1037,6 +1205,13 @@ Por favor, confírmenme la emisión del comprobante.`;
         const cotizadas = adminCotizaciones.filter(
             (c) => String(c.estado || "").toUpperCase() === "COTIZADA"
         ).length;
+
+        const aprobadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "APROBADA").length;
+        const rechazadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "RECHAZADA").length;
+        const pedidosPendientes = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "PENDIENTE").length;
+        const pedidosProceso = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "EN_PROCESO").length;
+        const pedidosCompletados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "COMPLETADO").length;
+        const pedidosCancelados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "CANCELADO").length;
 
         const estilos = {
             pagina: { minHeight: "100vh", background: "#f4f7fb", color: "#10233f", fontFamily: "Arial, sans-serif" },
@@ -1133,17 +1308,68 @@ Por favor, confírmenme la emisión del comprobante.`;
                         />
 
                         <div style={{ fontSize: "11px", letterSpacing: "1.5px", color: "#7fa7d3", margin: "0 8px 12px", fontWeight: 800 }}>ADMINISTRACIÓN</div>
-                        <button type="button" style={estilos.navItem}>📊 Dashboard</button>
-                        <button type="button" style={estilos.navItem}>📋 Cotizaciones</button>
-                        <button type="button" style={{ ...estilos.navItem, marginTop: "28px", background: "rgba(255,255,255,.04)" }} onClick={cerrarSesionAdmin}>🚪 Cerrar sesión</button>
+                        <button
+                            type="button"
+                            style={estilos.navItem}
+                            onClick={() => {
+                                setAdminSeccion("dashboard");
+                                cargarCotizacionesAdmin();
+                                cargarPedidosAdmin();
+                            }}
+                        >
+                            📊 Dashboard
+                        </button>
+
+                        <button
+                            type="button"
+                            style={estilos.navItem}
+                            onClick={() => {
+                                setAdminSeccion("cotizaciones");
+                                setAdminPedidoSeleccionado(null);
+                                cargarCotizacionesAdmin();
+                            }}
+                        >
+                            📋 Cotizaciones
+                        </button>
+
+                        <button
+                            type="button"
+                            style={estilos.navItem}
+                            onClick={() => {
+                                setAdminSeccion("pedidos");
+                                setAdminPedidoSeleccionado(null);
+                                setAdminCotizacionSeleccionada(null);
+                                setAdminPedidoMensaje("");
+                                cargarPedidosAdmin();
+                            }}
+                        >
+                            📦 Pedidos
+                        </button>
+
+                        <button
+                            type="button"
+                            style={{
+                                ...estilos.navItem,
+                                marginTop: "28px",
+                                background: "rgba(255,255,255,.04)"
+                            }}
+                            onClick={cerrarSesionAdmin}
+                        >
+                            🚪 Cerrar sesión
+                        </button>
                     </aside>
 
                     <main style={estilos.contenido}>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "center", marginBottom: "26px", flexWrap: "wrap" }}>
                             <div>
                                 <div style={{ color: "#1473e6", fontSize: "12px", letterSpacing: "1.4px", fontWeight: 900 }}>PANEL ADMINISTRATIVO</div>
-                                <h1 style={{ margin: "6px 0 4px", fontSize: "30px" }}>Solicitudes de cotización</h1>
-                                <p style={{ margin: 0, color: "#64748b" }}>Revisa las solicitudes registradas desde la web.</p>
+                                <h1 style={{ margin: "6px 0 4px", fontSize: "30px" }}>
+                                    {adminSeccion === "pedidos" ? "Gestión de pedidos" : adminSeccion === "dashboard" ? "Panel de control" : "Solicitudes de cotización"}
+                                </h1>
+
+                                <p style={{ margin: 0, color: "#64748b" }}>
+                                    {adminSeccion === "pedidos" ? "Revisa y administra los pedidos generados desde cotizaciones aprobadas." : adminSeccion === "dashboard" ? "Resumen general de cotizaciones y pedidos de INGEDATA." : "Revisa las solicitudes registradas desde la web."}
+                                </p>
                             </div>
                             <div style={{ ...estilos.tarjeta, padding: "12px 16px", fontSize: "13px" }}>
                                 <div style={{ fontWeight: 800 }}>{adminUsuario?.nombre || "Administrador INGEDATA"}</div>
@@ -1151,72 +1377,96 @@ Por favor, confírmenme la emisión del comprobante.`;
                             </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total solicitudes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminCotizaciones.length}</div></div>
-                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pendientes}</div></div>
-                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Personas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{personas}</div></div>
-                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Empresas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{empresas}</div></div>
-                            <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cotizadas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{cotizadas}</div></div>
-                        </div>
-
-                        {adminCotizacionesError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminCotizacionesError}</div>}
-
-                        <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
-                            <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
-                                <div><h2 style={{ margin: 0, fontSize: "19px" }}>Cotizaciones</h2><small style={{ color: "#64748b" }}>Personas y empresas</small></div>
-                                <button type="button" style={estilos.botonAzul} onClick={() => cargarCotizacionesAdmin()} disabled={adminCotizacionesCargando}>{adminCotizacionesCargando ? "Actualizando..." : "↻ Actualizar"}</button>
-                            </div>
-
-                            {adminCotizacionesCargando && adminCotizaciones.length === 0 ? (
-                                <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Cargando cotizaciones...</div>
-                            ) : adminCotizaciones.length === 0 ? (
-                                <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>No hay solicitudes registradas.</div>
-                            ) : (
-                                <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "850px" }}>
-                                        <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Tipo", "Documento", "Productos", "Estado", "Fecha", "Acción"].map((t) => <th key={t} style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b", borderBottom: "1px solid #e7edf5" }}>{t}</th>)}</tr></thead>
-                                        <tbody>
-                                            {adminCotizaciones.map((c) => (
-                                                <tr key={c.id}>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", fontWeight: 800, whiteSpace: "nowrap" }}>{c.codigo}</td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><div style={{ fontWeight: 800 }}>{c.cliente?.nombre || "Sin nombre"}</div><small style={{ color: "#64748b" }}>{c.cliente?.correo || "Sin correo"}</small></td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.tipo_cliente || "-"}</td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.documento || "-"}</td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", textAlign: "center" }}>{c.cantidad_productos ?? 0}</td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><span
-                                                        style={{
-                                                            ...estilos.badge,
-                                                            background:
-                                                                String(c.estado || "").toUpperCase() === "APROBADA"
-                                                                    ? "#dcfce7"
-                                                                    : String(c.estado || "").toUpperCase() === "RECHAZADA"
-                                                                        ? "#ffe4e6"
-                                                                        : String(c.estado || "").toUpperCase() === "COTIZADA"
-                                                                            ? "#dbeafe"
-                                                                            : "#fff7d6",
-                                                            color:
-                                                                String(c.estado || "").toUpperCase() === "APROBADA"
-                                                                    ? "#166534"
-                                                                    : String(c.estado || "").toUpperCase() === "RECHAZADA"
-                                                                        ? "#be123c"
-                                                                        : String(c.estado || "").toUpperCase() === "COTIZADA"
-                                                                            ? "#1d4ed8"
-                                                                            : "#8a6500",
-                                                        }}
-                                                    >
-                                                        {c.estado || "PENDIENTE"}
-                                                    </span></td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{c.fecha_solicitud ? new Date(c.fecha_solicitud).toLocaleString("es-PE") : "-"}</td>
-                                                    <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetalleCotizacionAdmin(c.id)}>Ver</button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                        {adminSeccion === "dashboard" && (
+                            <>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                                    {[
+                                        ["Solicitudes", adminCotizaciones.length], ["Pendientes", pendientes], ["Cotizadas", cotizadas],
+                                        ["Aprobadas", aprobadas], ["Rechazadas", rechazadas], ["Pedidos", adminPedidos.length],
+                                        ["En proceso", pedidosProceso], ["Completados", pedidosCompletados]
+                                    ].map(([titulo, valor]) => <div key={titulo} style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>{titulo}</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{valor}</div></div>)}
                                 </div>
-                            )}
-                        </section>
+                                <section style={{ ...estilos.tarjeta, padding: "22px" }}>
+                                    <h2 style={{ margin: "0 0 16px" }}>Resumen operativo</h2>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
+                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Cotizaciones</b><p style={{ color: "#64748b", marginBottom: 0 }}>{personas} personas · {empresas} empresas</p></div>
+                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos activos</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosPendientes} pendientes · {pedidosProceso} en proceso</p></div>
+                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos cerrados</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosCompletados} completados · {pedidosCancelados} cancelados</p></div>
+                                    </div>
+                                </section>
+                            </>
+                        )}
+
+                        {adminSeccion === "cotizaciones" && (
+                            <>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total solicitudes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminCotizaciones.length}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pendientes}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Personas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{personas}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Empresas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{empresas}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cotizadas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{cotizadas}</div></div>
+                                </div>
+                                {adminCotizacionesError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminCotizacionesError}</div>}
+                                <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
+                                    <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
+                                        <div><h2 style={{ margin: 0, fontSize: "19px" }}>Cotizaciones</h2><small style={{ color: "#64748b" }}>Personas y empresas</small></div>
+                                        <button type="button" style={estilos.botonAzul} onClick={() => cargarCotizacionesAdmin()} disabled={adminCotizacionesCargando}>{adminCotizacionesCargando ? "Actualizando..." : "↻ Actualizar"}</button>
+                                    </div>
+                                    {adminCotizacionesCargando && adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Cargando cotizaciones...</div> : adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>No hay solicitudes registradas.</div> : (
+                                        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                            <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Tipo", "Documento", "Productos", "Estado", "Fecha", "Acción"].map((t) => <th key={t} style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b", borderBottom: "1px solid #e7edf5" }}>{t}</th>)}</tr></thead>
+                                            <tbody>{adminCotizaciones.map((c) => <tr key={c.id}>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", fontWeight: 800, whiteSpace: "nowrap" }}>{c.codigo}</td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><div style={{ fontWeight: 800 }}>{c.cliente?.nombre || "Sin nombre"}</div><small style={{ color: "#64748b" }}>{c.cliente?.correo || "Sin correo"}</small></td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.tipo_cliente || "-"}</td><td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.documento || "-"}</td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", textAlign: "center" }}>{c.cantidad_productos ?? 0}</td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><span style={estilos.badge}>{c.estado || "PENDIENTE"}</span></td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{c.fecha_solicitud ? new Date(c.fecha_solicitud).toLocaleString("es-PE") : "-"}</td>
+                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetalleCotizacionAdmin(c.id)}>Ver</button></td>
+                                            </tr>)}</tbody>
+                                        </table></div>
+                                    )}
+                                </section>
+                            </>
+                        )}
+
+                        {adminSeccion === "pedidos" && (
+                            <>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "16px", marginBottom: "24px" }}>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total pedidos</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminPedidos.length}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosPendientes}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>En proceso</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosProceso}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Completados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCompletados}</div></div>
+                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cancelados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCancelados}</div></div>
+                                </div>
+                                {adminPedidosError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminPedidosError}</div>}
+                                <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
+                                    <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ margin: 0 }}>Pedidos</h2><small style={{ color: "#64748b" }}>Pedidos generados desde cotizaciones aprobadas</small></div><button type="button" style={estilos.botonAzul} onClick={() => cargarPedidosAdmin()}>{adminPedidosCargando ? "Actualizando..." : "↻ Actualizar"}</button></div>
+                                    {adminPedidosCargando && adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center" }}>Cargando pedidos...</div> : adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>No hay pedidos registrados.</div> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                        <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Documento", "Productos", "Total", "Estado", "Fecha", "Acción"].map(t => <th key={t} style={{ padding: "13px 16px", fontSize: 12, color: "#64748b" }}>{t}</th>)}</tr></thead>
+                                        <tbody>{adminPedidos.map(p => <tr key={p.id}><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>{p.codigo}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.nombre || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.documento || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cantidad_productos ?? 0}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>S/ {Number(p.total || 0).toFixed(2)}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><span style={estilos.badge}>{p.estado}</span></td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{p.fecha_pedido ? new Date(p.fecha_pedido).toLocaleString("es-PE") : "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetallePedidoAdmin(p.id)}>Ver</button></td></tr>)}</tbody>
+                                    </table></div>}
+                                </section>
+                            </>
+                        )}
                     </main>
                 </div>
+
+                {adminPedidoSeleccionado && (
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: 20 }} onClick={() => setAdminPedidoSeleccionado(null)}>
+                        <div style={{ width: "min(900px,100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: 20, boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={e => e.stopPropagation()}>
+                            <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e7edf5" }}><div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DEL PEDIDO</small><h2 style={{ margin: "4px 0 0" }}>{adminPedidoSeleccionado.codigo}</h2></div><button onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", fontSize: 20, cursor: "pointer" }}>×</button></div>
+                            <div style={{ padding: 22 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 20 }}><div style={estilos.stat}><small>Cliente</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.nombre || "-"}</div></div><div style={estilos.stat}><small>Documento</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.documento || "-"}</div></div><div style={estilos.stat}><small>Estado</small><div style={{ marginTop: 5 }}><span style={estilos.badge}>{adminPedidoSeleccionado.estado}</span></div></div></div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10, marginBottom: 20 }}><div><b>Teléfono:</b> {adminPedidoSeleccionado.cliente?.telefono || "-"}</div><div><b>Correo:</b> {adminPedidoSeleccionado.cliente?.correo || "-"}</div><div><b>Dirección:</b> {adminPedidoSeleccionado.cliente?.direccion || "-"}</div><div><b>Fecha:</b> {adminPedidoSeleccionado.fecha_pedido ? new Date(adminPedidoSeleccionado.fecha_pedido).toLocaleString("es-PE") : "-"}</div></div>
+                                <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 650 }}><thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Producto", "Marca", "Cantidad", "P. unitario", "Subtotal"].map(t => <th key={t} style={{ padding: 11 }}>{t}</th>)}</tr></thead><tbody>{(adminPedidoSeleccionado.productos || []).map((p, i) => <tr key={p.id || i}><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 700 }}>{p.nombre}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.marca || "-"}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.cantidad}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>S/ {Number(p.precio_unitario || 0).toFixed(2)}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 800 }}>S/ {Number(p.subtotal || 0).toFixed(2)}</td></tr>)}</tbody></table></div>
+                                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}><div style={estilos.resumenTotal}><span>Subtotal</span><b>S/ {Number(adminPedidoSeleccionado.subtotal || 0).toFixed(2)}</b><span>IGV 18 %</span><b>S/ {Number(adminPedidoSeleccionado.igv || 0).toFixed(2)}</b><strong>TOTAL</strong><strong style={{ color: "#1473e6", fontSize: 20 }}>S/ {Number(adminPedidoSeleccionado.total || 0).toFixed(2)}</strong></div></div>
+                                {adminPedidoMensaje && <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2", color: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c", fontWeight: 800 }}>{adminPedidoMensaje}</div>}
+                                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18, flexWrap: "wrap" }}><button type="button" onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "12px 16px", background: "#fff", fontWeight: 800, cursor: "pointer" }}>Cerrar</button>{!["COMPLETADO", "CANCELADO"].includes(String(adminPedidoSeleccionado.estado || "").toUpperCase()) && <><button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("CANCELADO")} style={{ border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", background: "#fff1f2", color: "#be123c", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "PENDIENTE" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("EN_PROCESO")} style={estilos.botonAzul}>Pasar a EN PROCESO</button>}{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "EN_PROCESO" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("COMPLETADO")} style={estilos.botonAzul}>Marcar COMPLETADO</button>}</>}</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {adminCotizacionSeleccionada && (
                     <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: "20px" }} onClick={() => setAdminCotizacionSeleccionada(null)}>
@@ -2600,6 +2850,7 @@ Por favor, confírmenme la emisión del comprobante.`;
             </div>
         </>
     );
+
 }
 
 export default App;

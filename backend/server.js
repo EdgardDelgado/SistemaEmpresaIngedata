@@ -602,6 +602,190 @@ async function inicializarBaseDatos() {
     console.log(
         "Tablas de cotizaciones verificadas correctamente"
     );
+    // =====================================================
+    // PEDIDOS
+    // =====================================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS pedidos (
+            id BIGSERIAL PRIMARY KEY,
+            cotizacion_id BIGINT NOT NULL,
+            cliente_id BIGINT NOT NULL,
+            codigo VARCHAR(60) NOT NULL,
+            estado VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+            subtotal NUMERIC(12,2) NOT NULL,
+            igv NUMERIC(12,2) NOT NULL,
+            total NUMERIC(12,2) NOT NULL,
+            observaciones TEXT,
+            fecha_pedido TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            fecha_actualizacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+    // =====================================================
+    // EVITAR DOS PEDIDOS DE UNA MISMA COTIZACIÓN
+    // =====================================================
+
+    await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_cotizacion
+        ON pedidos(cotizacion_id);
+    `);
+
+    await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_codigo
+        ON pedidos(codigo);
+    `);
+
+    // =====================================================
+    // RELACIÓN PEDIDO -> COTIZACIÓN
+    // =====================================================
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_pedidos_cotizacion'
+            ) THEN
+                ALTER TABLE pedidos
+                ADD CONSTRAINT fk_pedidos_cotizacion
+                FOREIGN KEY (cotizacion_id)
+                REFERENCES cotizaciones(id)
+                ON DELETE RESTRICT;
+            END IF;
+        END $$;
+    `);
+
+    // =====================================================
+    // RELACIÓN PEDIDO -> CLIENTE
+    // =====================================================
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_pedidos_cliente'
+            ) THEN
+                ALTER TABLE pedidos
+                ADD CONSTRAINT fk_pedidos_cliente
+                FOREIGN KEY (cliente_id)
+                REFERENCES clientes(id)
+                ON DELETE RESTRICT;
+            END IF;
+        END $$;
+    `);
+
+    // =====================================================
+    // DETALLE DEL PEDIDO
+    // =====================================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS detalle_pedido (
+            id BIGSERIAL PRIMARY KEY,
+            pedido_id BIGINT NOT NULL,
+            producto_id BIGINT NOT NULL,
+            cantidad INTEGER NOT NULL,
+            precio_unitario NUMERIC(12,2) NOT NULL,
+            subtotal NUMERIC(12,2) NOT NULL
+        );
+    `);
+
+    // =====================================================
+    // RELACIÓN DETALLE PEDIDO -> PEDIDO
+    // =====================================================
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_detalle_pedido'
+            ) THEN
+                ALTER TABLE detalle_pedido
+                ADD CONSTRAINT fk_detalle_pedido
+                FOREIGN KEY (pedido_id)
+                REFERENCES pedidos(id)
+                ON DELETE CASCADE;
+            END IF;
+        END $$;
+    `);
+
+    // =====================================================
+    // RELACIÓN DETALLE PEDIDO -> PRODUCTO
+    // =====================================================
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_detalle_pedido_producto'
+            ) THEN
+                ALTER TABLE detalle_pedido
+                ADD CONSTRAINT fk_detalle_pedido_producto
+                FOREIGN KEY (producto_id)
+                REFERENCES productos(id)
+                ON DELETE RESTRICT;
+            END IF;
+        END $$;
+    `);
+
+    // =====================================================
+    // VALIDAR CANTIDAD
+    // =====================================================
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'chk_detalle_pedido_cantidad'
+            ) THEN
+                ALTER TABLE detalle_pedido
+                ADD CONSTRAINT chk_detalle_pedido_cantidad
+                CHECK (cantidad > 0);
+            END IF;
+        END $$;
+    `);
+
+    // =====================================================
+    // ÍNDICES PEDIDOS
+    // =====================================================
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_pedidos_cliente
+        ON pedidos(cliente_id);
+    `);
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_pedidos_estado
+        ON pedidos(estado);
+    `);
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_pedidos_fecha
+        ON pedidos(fecha_pedido);
+    `);
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_detalle_pedido_id
+        ON detalle_pedido(pedido_id);
+    `);
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_detalle_pedido_producto
+        ON detalle_pedido(producto_id);
+    `);
+
+    console.log(
+        "Tablas de pedidos verificadas correctamente"
+    );
 }
 
 // =========================================================
@@ -662,7 +846,928 @@ app.get("/productos", async (req, res) => {
         });
     }
 });
+// =========================================================
+// ADMIN - GENERAR PEDIDO DESDE COTIZACIÓN
+// =========================================================
 
+app.post(
+    "/admin/cotizaciones/:id/generar-pedido",
+    verificarAdmin,
+    async (req, res) => {
+        let conexion;
+
+        try {
+            conexion = await pool.connect();
+
+            const cotizacionId = Number(req.params.id);
+
+            // =============================================
+            // VALIDAR ID
+            // =============================================
+
+            if (
+                !Number.isInteger(cotizacionId) ||
+                cotizacionId <= 0
+            ) {
+                return res.status(400).json({
+                    error: "ID de cotización inválido",
+                });
+            }
+
+            await conexion.query("BEGIN");
+
+            // =============================================
+            // CONSULTAR COTIZACIÓN
+            // =============================================
+
+            const resultadoCotizacion =
+                await conexion.query(
+                    `
+                    SELECT
+                        id,
+                        cliente_id,
+                        codigo,
+                        estado,
+                        subtotal,
+                        igv,
+                        total,
+                        observaciones
+                    FROM cotizaciones
+                    WHERE id = $1
+                    LIMIT 1
+                    FOR UPDATE
+                    `,
+                    [cotizacionId]
+                );
+
+            if (
+                resultadoCotizacion.rowCount === 0
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(404).json({
+                    error:
+                        "Cotización no encontrada",
+                });
+            }
+
+            const cotizacion =
+                resultadoCotizacion.rows[0];
+
+            // =============================================
+            // VALIDAR ESTADO
+            // =============================================
+
+            if (
+                String(
+                    cotizacion.estado || ""
+                ).toUpperCase() !== "APROBADA"
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "La cotización todavía no puede generar un pedido",
+                    detalle:
+                        "Solo las cotizaciones APROBADAS pueden convertirse en pedido",
+                    estado_actual:
+                        cotizacion.estado,
+                });
+            }
+
+            // =============================================
+            // VALIDAR IMPORTES
+            // =============================================
+
+            if (
+                cotizacion.subtotal === null ||
+                cotizacion.igv === null ||
+                cotizacion.total === null
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "La cotización no contiene importes completos",
+                });
+            }
+
+            // =============================================
+            // EVITAR PEDIDO DUPLICADO
+            // =============================================
+
+            const pedidoExistente =
+                await conexion.query(
+                    `
+                    SELECT
+                        id,
+                        codigo,
+                        estado
+                    FROM pedidos
+                    WHERE cotizacion_id = $1
+                    LIMIT 1
+                    `,
+                    [cotizacionId]
+                );
+
+            if (
+                pedidoExistente.rowCount > 0
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(409).json({
+                    error:
+                        "Esta cotización ya tiene un pedido generado",
+                    pedido:
+                        pedidoExistente.rows[0],
+                });
+            }
+
+            // =============================================
+            // CONSULTAR PRODUCTOS DE LA COTIZACIÓN
+            // =============================================
+
+            const resultadoDetalles =
+                await conexion.query(
+                    `
+                    SELECT
+                        id,
+                        producto_id,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
+                    FROM detalle_cotizacion
+                    WHERE cotizacion_id = $1
+                    ORDER BY id ASC
+                    `,
+                    [cotizacionId]
+                );
+
+            if (
+                resultadoDetalles.rowCount === 0
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "La cotización no contiene productos",
+                });
+            }
+
+            // =============================================
+            // VALIDAR PRODUCTOS COTIZADOS
+            // =============================================
+
+            for (
+                const detalle
+                of resultadoDetalles.rows
+            ) {
+                if (
+                    detalle.precio_unitario === null ||
+                    detalle.subtotal === null
+                ) {
+                    await conexion.query("ROLLBACK");
+
+                    return res.status(400).json({
+                        error:
+                            "La cotización contiene productos sin precio",
+                    });
+                }
+            }
+
+            // =============================================
+            // GENERAR CÓDIGO DEL PEDIDO
+            // =============================================
+
+            const anio =
+                new Date().getFullYear();
+
+            const timestamp =
+                Date.now();
+
+            const aleatorio =
+                Math.floor(
+                    Math.random() * 900 + 100
+                );
+
+            const codigoPedido =
+                `PED-${anio}-${timestamp}-${aleatorio}`;
+
+            // =============================================
+            // CREAR PEDIDO
+            // =============================================
+
+            const resultadoPedido =
+                await conexion.query(
+                    `
+                    INSERT INTO pedidos (
+                        cotizacion_id,
+                        cliente_id,
+                        codigo,
+                        estado,
+                        subtotal,
+                        igv,
+                        total,
+                        observaciones,
+                        fecha_pedido,
+                        fecha_actualizacion
+                    )
+                    VALUES (
+                        $1,
+                        $2,
+                        $3,
+                        'PENDIENTE',
+                        $4,
+                        $5,
+                        $6,
+                        $7,
+                        NOW(),
+                        NOW()
+                    )
+                    RETURNING
+                        id,
+                        cotizacion_id,
+                        cliente_id,
+                        codigo,
+                        estado,
+                        subtotal,
+                        igv,
+                        total,
+                        observaciones,
+                        fecha_pedido,
+                        fecha_actualizacion
+                    `,
+                    [
+                        cotizacion.id,
+                        cotizacion.cliente_id,
+                        codigoPedido,
+                        cotizacion.subtotal,
+                        cotizacion.igv,
+                        cotizacion.total,
+                        cotizacion.observaciones,
+                    ]
+                );
+
+            const pedido =
+                resultadoPedido.rows[0];
+
+            // =============================================
+            // COPIAR DETALLE DE LA COTIZACIÓN
+            // =============================================
+
+            const productosPedido = [];
+
+            for (
+                const detalle
+                of resultadoDetalles.rows
+            ) {
+                const resultadoDetallePedido =
+                    await conexion.query(
+                        `
+                        INSERT INTO detalle_pedido (
+                            pedido_id,
+                            producto_id,
+                            cantidad,
+                            precio_unitario,
+                            subtotal
+                        )
+                        VALUES (
+                            $1,
+                            $2,
+                            $3,
+                            $4,
+                            $5
+                        )
+                        RETURNING
+                            id,
+                            pedido_id,
+                            producto_id,
+                            cantidad,
+                            precio_unitario,
+                            subtotal
+                        `,
+                        [
+                            pedido.id,
+                            detalle.producto_id,
+                            detalle.cantidad,
+                            detalle.precio_unitario,
+                            detalle.subtotal,
+                        ]
+                    );
+
+                productosPedido.push({
+                    ...resultadoDetallePedido
+                        .rows[0],
+
+                    precio_unitario:
+                        Number(
+                            resultadoDetallePedido
+                                .rows[0]
+                                .precio_unitario
+                        ),
+
+                    subtotal:
+                        Number(
+                            resultadoDetallePedido
+                                .rows[0]
+                                .subtotal
+                        ),
+                });
+            }
+
+            await conexion.query("COMMIT");
+
+            // =============================================
+            // RESPUESTA
+            // =============================================
+
+            res.status(201).json({
+                mensaje:
+                    "Pedido generado correctamente",
+
+                pedido: {
+                    ...pedido,
+
+                    subtotal:
+                        Number(
+                            pedido.subtotal
+                        ),
+
+                    igv:
+                        Number(
+                            pedido.igv
+                        ),
+
+                    total:
+                        Number(
+                            pedido.total
+                        ),
+
+                    productos:
+                        productosPedido,
+                },
+            });
+
+        } catch (error) {
+            if (conexion) {
+                try {
+                    await conexion.query(
+                        "ROLLBACK"
+                    );
+                } catch (rollbackError) {
+                    console.error(
+                        "Error al realizar rollback:",
+                        rollbackError
+                    );
+                }
+            }
+
+            console.error(
+                "Error al generar pedido:",
+                error
+            );
+
+            if (
+                error.code === "23505"
+            ) {
+                return res.status(409).json({
+                    error:
+                        "Esta cotización ya tiene un pedido generado",
+                });
+            }
+
+            res.status(500).json({
+                error:
+                    "Error al generar pedido",
+                detalle:
+                    error.message,
+            });
+
+        } finally {
+            if (conexion) {
+                conexion.release();
+            }
+        }
+    }
+);
+// =========================================================
+// ADMIN - LISTAR PEDIDOS
+// =========================================================
+
+app.get(
+    "/admin/pedidos",
+    verificarAdmin,
+    async (req, res) => {
+        try {
+            const resultado = await pool.query(`
+                SELECT
+                    p.id,
+                    p.cotizacion_id,
+                    p.cliente_id,
+                    p.codigo,
+                    p.estado,
+                    p.subtotal,
+                    p.igv,
+                    p.total,
+                    p.observaciones,
+                    p.fecha_pedido,
+                    p.fecha_actualizacion,
+
+                    c.tipo_cliente,
+                    c.nombres,
+                    c.apellidos,
+                    c.dni,
+                    c.razon_social,
+                    c.ruc,
+                    c.telefono,
+                    c.correo,
+                    c.direccion,
+
+                    COUNT(dp.id) AS cantidad_items,
+                    COALESCE(SUM(dp.cantidad), 0) AS cantidad_productos
+
+                FROM pedidos p
+
+                INNER JOIN clientes c
+                    ON c.id = p.cliente_id
+
+                LEFT JOIN detalle_pedido dp
+                    ON dp.pedido_id = p.id
+
+                GROUP BY
+                    p.id,
+                    p.cotizacion_id,
+                    p.cliente_id,
+                    p.codigo,
+                    p.estado,
+                    p.subtotal,
+                    p.igv,
+                    p.total,
+                    p.observaciones,
+                    p.fecha_pedido,
+                    p.fecha_actualizacion,
+
+                    c.tipo_cliente,
+                    c.nombres,
+                    c.apellidos,
+                    c.dni,
+                    c.razon_social,
+                    c.ruc,
+                    c.telefono,
+                    c.correo,
+                    c.direccion
+
+                ORDER BY p.fecha_pedido DESC;
+            `);
+
+            const pedidos = resultado.rows.map((pedido) => {
+                const nombreCliente =
+                    pedido.tipo_cliente === "EMPRESA"
+                        ? pedido.razon_social
+                        : `${pedido.nombres || ""} ${pedido.apellidos || ""}`.trim();
+
+                const documento =
+                    pedido.tipo_cliente === "EMPRESA"
+                        ? pedido.ruc
+                        : pedido.dni;
+
+                return {
+                    id: pedido.id,
+                    cotizacion_id: pedido.cotizacion_id,
+                    codigo: pedido.codigo,
+                    estado: pedido.estado,
+
+                    subtotal:
+                        pedido.subtotal === null
+                            ? null
+                            : Number(pedido.subtotal),
+
+                    igv:
+                        pedido.igv === null
+                            ? null
+                            : Number(pedido.igv),
+
+                    total:
+                        pedido.total === null
+                            ? null
+                            : Number(pedido.total),
+
+                    observaciones: pedido.observaciones,
+                    fecha_pedido: pedido.fecha_pedido,
+                    fecha_actualizacion: pedido.fecha_actualizacion,
+
+                    cliente: {
+                        id: pedido.cliente_id,
+                        tipo_cliente: pedido.tipo_cliente,
+                        nombre: nombreCliente,
+                        documento,
+                        telefono: pedido.telefono,
+                        correo: pedido.correo,
+                        direccion: pedido.direccion,
+                    },
+
+                    cantidad_items:
+                        Number(pedido.cantidad_items),
+
+                    cantidad_productos:
+                        Number(pedido.cantidad_productos),
+                };
+            });
+
+            res.json(pedidos);
+
+        } catch (error) {
+            console.error(
+                "Error al listar pedidos:",
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    "Error al listar pedidos",
+                detalle:
+                    error.message,
+            });
+        }
+    }
+);
+// =========================================================
+// ADMIN - OBTENER DETALLE DE PEDIDO
+// =========================================================
+
+app.get(
+    "/admin/pedidos/:id",
+    verificarAdmin,
+    async (req, res) => {
+        try {
+            const { id } = req.params;
+
+            if (!/^\d+$/.test(id)) {
+                return res.status(400).json({
+                    error: "ID de pedido inválido",
+                });
+            }
+
+            const resultadoPedido = await pool.query(
+                `
+                SELECT
+                    p.id,
+                    p.cotizacion_id,
+                    p.cliente_id,
+                    p.codigo,
+                    p.estado,
+                    p.subtotal,
+                    p.igv,
+                    p.total,
+                    p.observaciones,
+                    p.fecha_pedido,
+                    p.fecha_actualizacion,
+
+                    c.tipo_cliente,
+                    c.nombres,
+                    c.apellidos,
+                    c.dni,
+                    c.razon_social,
+                    c.ruc,
+                    c.telefono,
+                    c.correo,
+                    c.direccion
+
+                FROM pedidos p
+
+                INNER JOIN clientes c
+                    ON c.id = p.cliente_id
+
+                WHERE p.id = $1
+                `,
+                [id]
+            );
+
+            if (resultadoPedido.rows.length === 0) {
+                return res.status(404).json({
+                    error: "Pedido no encontrado",
+                });
+            }
+
+            const pedido = resultadoPedido.rows[0];
+
+            const resultadoDetalles = await pool.query(
+                `
+                SELECT
+                    dp.id,
+                    dp.producto_id,
+                    dp.cantidad,
+                    dp.precio_unitario,
+                    dp.subtotal,
+
+                    pr.nombre,
+                    pr.marca
+
+                FROM detalle_pedido dp
+
+                INNER JOIN productos pr
+                    ON pr.id = dp.producto_id
+
+                WHERE dp.pedido_id = $1
+
+                ORDER BY dp.id ASC
+                `,
+                [id]
+            );
+
+            const nombreCliente =
+                pedido.tipo_cliente === "EMPRESA"
+                    ? pedido.razon_social
+                    : `${pedido.nombres || ""} ${pedido.apellidos || ""}`.trim();
+
+            const documento =
+                pedido.tipo_cliente === "EMPRESA"
+                    ? pedido.ruc
+                    : pedido.dni;
+
+            const respuesta = {
+                id: pedido.id,
+                cotizacion_id: pedido.cotizacion_id,
+                codigo: pedido.codigo,
+                estado: pedido.estado,
+
+                subtotal:
+                    pedido.subtotal === null
+                        ? null
+                        : Number(pedido.subtotal),
+
+                igv:
+                    pedido.igv === null
+                        ? null
+                        : Number(pedido.igv),
+
+                total:
+                    pedido.total === null
+                        ? null
+                        : Number(pedido.total),
+
+                observaciones: pedido.observaciones,
+                fecha_pedido: pedido.fecha_pedido,
+                fecha_actualizacion: pedido.fecha_actualizacion,
+
+                cliente: {
+                    id: pedido.cliente_id,
+                    tipo_cliente: pedido.tipo_cliente,
+                    nombre: nombreCliente,
+                    documento,
+                    telefono: pedido.telefono,
+                    correo: pedido.correo,
+                    direccion: pedido.direccion,
+                },
+
+                productos: resultadoDetalles.rows.map((detalle) => ({
+                    id: detalle.id,
+                    producto_id: detalle.producto_id,
+                    nombre: detalle.nombre,
+                    marca: detalle.marca,
+                    cantidad: Number(detalle.cantidad),
+
+                    precio_unitario:
+                        detalle.precio_unitario === null
+                            ? null
+                            : Number(detalle.precio_unitario),
+
+                    subtotal:
+                        detalle.subtotal === null
+                            ? null
+                            : Number(detalle.subtotal),
+                })),
+            };
+
+            res.json(respuesta);
+
+        } catch (error) {
+            console.error(
+                "Error al obtener detalle del pedido:",
+                error
+            );
+
+            res.status(500).json({
+                error: "Error al obtener detalle del pedido",
+                detalle: error.message,
+            });
+        }
+    }
+);
+// =========================================================
+// ADMIN - CAMBIAR ESTADO DE PEDIDO
+// =========================================================
+
+app.patch(
+    "/admin/pedidos/:id/estado",
+    verificarAdmin,
+    async (req, res) => {
+        try {
+            const pedidoId = Number(req.params.id);
+
+            const nuevoEstado = String(
+                req.body.estado || ""
+            )
+                .trim()
+                .toUpperCase();
+
+            // =============================================
+            // VALIDAR ID
+            // =============================================
+
+            if (
+                !Number.isInteger(pedidoId) ||
+                pedidoId <= 0
+            ) {
+                return res.status(400).json({
+                    error: "ID de pedido inválido",
+                });
+            }
+
+            // =============================================
+            // VALIDAR ESTADO
+            // =============================================
+
+            const estadosPermitidos = [
+                "PENDIENTE",
+                "EN_PROCESO",
+                "COMPLETADO",
+                "CANCELADO",
+            ];
+
+            if (
+                !estadosPermitidos.includes(
+                    nuevoEstado
+                )
+            ) {
+                return res.status(400).json({
+                    error: "Estado inválido",
+                    detalle:
+                        "Los estados permitidos son PENDIENTE, EN_PROCESO, COMPLETADO o CANCELADO",
+                });
+            }
+
+            // =============================================
+            // BUSCAR PEDIDO
+            // =============================================
+
+            const resultadoActual =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        codigo,
+                        estado,
+                        subtotal,
+                        igv,
+                        total
+                    FROM pedidos
+                    WHERE id = $1
+                    LIMIT 1
+                    `,
+                    [pedidoId]
+                );
+
+            if (
+                resultadoActual.rowCount === 0
+            ) {
+                return res.status(404).json({
+                    error: "Pedido no encontrado",
+                });
+            }
+
+            const pedidoActual =
+                resultadoActual.rows[0];
+
+            const estadoActual = String(
+                pedidoActual.estado || ""
+            ).toUpperCase();
+
+            // =============================================
+            // EVITAR CAMBIAR PEDIDOS FINALIZADOS
+            // =============================================
+
+            if (
+                ["COMPLETADO", "CANCELADO"].includes(
+                    estadoActual
+                )
+            ) {
+                return res.status(400).json({
+                    error:
+                        "El pedido ya está finalizado",
+                    detalle:
+                        `El pedido se encuentra en estado ${estadoActual}`,
+                });
+            }
+
+            // =============================================
+            // VALIDAR TRANSICIONES
+            // =============================================
+
+            const transicionesPermitidas = {
+                PENDIENTE: [
+                    "EN_PROCESO",
+                    "CANCELADO",
+                ],
+
+                EN_PROCESO: [
+                    "COMPLETADO",
+                    "CANCELADO",
+                ],
+            };
+
+            const posibles =
+                transicionesPermitidas[
+                estadoActual
+                ] || [];
+
+            if (
+                !posibles.includes(
+                    nuevoEstado
+                )
+            ) {
+                return res.status(400).json({
+                    error:
+                        "Cambio de estado no permitido",
+
+                    detalle:
+                        `No se puede cambiar de ${estadoActual} a ${nuevoEstado}`,
+                });
+            }
+
+            // =============================================
+            // ACTUALIZAR PEDIDO
+            // =============================================
+
+            const resultado =
+                await pool.query(
+                    `
+                    UPDATE pedidos
+                    SET
+                        estado = $1,
+                        fecha_actualizacion = NOW()
+                    WHERE id = $2
+                    RETURNING
+                        id,
+                        cotizacion_id,
+                        cliente_id,
+                        codigo,
+                        estado,
+                        subtotal,
+                        igv,
+                        total,
+                        observaciones,
+                        fecha_pedido,
+                        fecha_actualizacion
+                    `,
+                    [
+                        nuevoEstado,
+                        pedidoId,
+                    ]
+                );
+
+            const pedido =
+                resultado.rows[0];
+
+            res.json({
+                mensaje:
+                    "Estado del pedido actualizado correctamente",
+
+                pedido: {
+                    ...pedido,
+
+                    subtotal:
+                        Number(
+                            pedido.subtotal
+                        ),
+
+                    igv:
+                        Number(
+                            pedido.igv
+                        ),
+
+                    total:
+                        Number(
+                            pedido.total
+                        ),
+                },
+            });
+
+        } catch (error) {
+            console.error(
+                "Error al cambiar estado del pedido:",
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    "Error al cambiar estado del pedido",
+                detalle:
+                    error.message,
+            });
+        }
+    }
+);
 // =========================================================
 // CLIENTES - REGISTRAR
 // =========================================================
