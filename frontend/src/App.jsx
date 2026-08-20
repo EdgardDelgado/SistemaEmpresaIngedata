@@ -507,6 +507,7 @@ function App() {
     const [adminSeccion, setAdminSeccion] = useState("dashboard");
 
     const [adminPedidos, setAdminPedidos] = useState([]);
+    const [adminGuardandoPedido, setAdminGuardandoPedido] = useState(false);
     const [adminPedidosCargando, setAdminPedidosCargando] = useState(false);
     const [adminPedidosError, setAdminPedidosError] = useState("");
     const [adminPedidoSeleccionado, setAdminPedidoSeleccionado] = useState(null);
@@ -527,6 +528,21 @@ function App() {
     const [carritoAbierto, setCarritoAbierto] = useState(false);
     const [favoritos, setFavoritos] = useState({});
     const [toast, setToast] = useState("");
+    const [proformaAbierta, setProformaAbierta] = useState(false);
+    const [proformaEnviando, setProformaEnviando] = useState(false);
+    const [proformaMensaje, setProformaMensaje] = useState("");
+    const [proformaDatos, setProformaDatos] = useState({
+        tipo_cliente: "PERSONA",
+        nombres: "",
+        apellidos: "",
+        dni: "",
+        razon_social: "",
+        ruc: "",
+        telefono: "",
+        correo: "",
+        direccion: "",
+        observaciones: "",
+    });
     const [comprobante, setComprobante] = useState("boleta");
     const [datosComprobante, setDatosComprobante] = useState({
         dni: "",
@@ -678,6 +694,118 @@ Por favor, indíqueme precios, disponibilidad, plazo de entrega y condiciones co
             mostrarToast(`${etiqueta} copiado correctamente`);
         } catch {
             mostrarToast(`No se pudo copiar ${etiqueta.toLowerCase()}`);
+        }
+    };
+
+    const actualizarDatoProforma = (campo, valor) => {
+        setProformaDatos((prev) => ({ ...prev, [campo]: valor }));
+        setProformaMensaje("");
+    };
+
+    const abrirFormularioProforma = () => {
+        if (itemsCarrito.length === 0) {
+            mostrarToast("Selecciona al menos un producto");
+            return;
+        }
+
+        setProformaMensaje("");
+        setCarritoAbierto(false);
+        setProformaAbierta(true);
+    };
+
+    const enviarSolicitudProforma = async (e) => {
+        e.preventDefault();
+
+        if (itemsCarrito.length === 0) {
+            setProformaMensaje("La solicitud debe contener al menos un producto.");
+            return;
+        }
+
+        const tipo = String(proformaDatos.tipo_cliente || "").toUpperCase();
+
+        if (tipo === "PERSONA") {
+            if (!proformaDatos.nombres.trim() || !proformaDatos.apellidos.trim()) {
+                setProformaMensaje("Ingresa nombres y apellidos.");
+                return;
+            }
+            if (!/^\d{8}$/.test(proformaDatos.dni.trim())) {
+                setProformaMensaje("El DNI debe contener 8 dígitos.");
+                return;
+            }
+        } else {
+            if (!proformaDatos.razon_social.trim()) {
+                setProformaMensaje("Ingresa la razón social.");
+                return;
+            }
+            if (!/^\d{11}$/.test(proformaDatos.ruc.trim())) {
+                setProformaMensaje("El RUC debe contener 11 dígitos.");
+                return;
+            }
+        }
+
+        if (!proformaDatos.telefono.trim()) {
+            setProformaMensaje("Ingresa un teléfono.");
+            return;
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(proformaDatos.correo.trim())) {
+            setProformaMensaje("Ingresa un correo electrónico válido.");
+            return;
+        }
+
+        const payload = {
+            tipo_cliente: tipo,
+            nombres: tipo === "PERSONA" ? proformaDatos.nombres.trim() : null,
+            apellidos: tipo === "PERSONA" ? proformaDatos.apellidos.trim() : null,
+            dni: tipo === "PERSONA" ? proformaDatos.dni.trim() : null,
+            razon_social: tipo === "EMPRESA" ? proformaDatos.razon_social.trim() : null,
+            ruc: tipo === "EMPRESA" ? proformaDatos.ruc.trim() : null,
+            telefono: proformaDatos.telefono.trim(),
+            correo: proformaDatos.correo.trim(),
+            direccion: proformaDatos.direccion.trim(),
+            observaciones: proformaDatos.observaciones.trim(),
+            productos: itemsCarrito.map((item) => ({
+                producto_id: Number(item.id),
+                cantidad: Number(item.cantidad),
+            })),
+        };
+
+        try {
+            setProformaEnviando(true);
+            setProformaMensaje("");
+
+            const respuesta = await fetch(API_SOLICITUDES_PROFORMA, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await respuesta.json();
+
+            if (!respuesta.ok) {
+                throw new Error(data.error || data.detalle || "No se pudo registrar la solicitud.");
+            }
+
+            const codigo = data?.solicitud?.codigo || "";
+            setProformaMensaje(`Solicitud registrada correctamente${codigo ? ` · ${codigo}` : ""}`);
+            setCarrito({});
+            setProformaDatos({
+                tipo_cliente: "PERSONA",
+                nombres: "",
+                apellidos: "",
+                dni: "",
+                razon_social: "",
+                ruc: "",
+                telefono: "",
+                correo: "",
+                direccion: "",
+                observaciones: "",
+            });
+        } catch (error) {
+            console.error("Error al enviar solicitud de proforma:", error);
+            setProformaMensaje(error.message || "No se pudo registrar la solicitud.");
+        } finally {
+            setProformaEnviando(false);
         }
     };
 
@@ -1103,33 +1231,70 @@ Por favor, confírmenme la emisión del comprobante.`;
 
             const data = await respuesta.json();
 
-            if (respuesta.status === 401 || respuesta.status === 403) {
+            if (
+                respuesta.status === 401 ||
+                respuesta.status === 403
+            ) {
                 localStorage.removeItem("ingedata_admin_token");
                 setAdminToken("");
                 setAdminUsuario(null);
                 setAdminCotizacionSeleccionada(null);
 
                 throw new Error(
-                    data.error || "Tu sesión expiró. Inicia sesión nuevamente."
+                    data.error ||
+                    "Tu sesión expiró. Inicia sesión nuevamente."
                 );
             }
 
             if (!respuesta.ok) {
                 throw new Error(
-                    data.error || "No se pudo actualizar el estado de la cotización"
+                    data.error ||
+                    "No se pudo actualizar el estado de la cotización"
+                );
+            }
+
+            if (nuevoEstado === "APROBADA") {
+                const respuestaPedido = await fetch(
+                    `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/generar-pedido`,
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${adminToken}`,
+                        },
+                    }
+                );
+
+                const dataPedido = await respuestaPedido.json();
+
+                if (!respuestaPedido.ok) {
+                    throw new Error(
+                        dataPedido.error ||
+                        "La cotización fue aprobada, pero no se pudo generar el pedido"
+                    );
+                }
+
+                await cargarPedidosAdmin(adminToken);
+
+                setAdminCotizacionMensaje(
+                    dataPedido.existente
+                        ? `Cotización aprobada. El pedido ${dataPedido.pedido.codigo} ya existía.`
+                        : `Cotización aprobada y pedido ${dataPedido.pedido.codigo} generado correctamente.`
+                );
+            } else {
+                setAdminCotizacionMensaje(
+                    "Cotización rechazada correctamente."
                 );
             }
 
             await cargarCotizacionesAdmin(adminToken);
-            await abrirDetalleCotizacionAdmin(adminCotizacionSeleccionada.id);
 
-            setAdminCotizacionMensaje(
-                nuevoEstado === "APROBADA"
-                    ? "Cotización aprobada correctamente."
-                    : "Cotización rechazada correctamente."
+            await abrirDetalleCotizacionAdmin(
+                adminCotizacionSeleccionada.id
             );
+
         } catch (error) {
             setAdminCotizacionMensaje(error.message);
+
         } finally {
             setAdminGuardandoCotizacion(false);
         }
@@ -2825,14 +2990,13 @@ Por favor, confírmenme la emisión del comprobante.`;
                     </p>
 
                     {itemsCarrito.length > 0 ? (
-                        <a
+                        <button
                             className="checkout"
-                            href={whatsappCotizacion}
-                            target="_blank"
-                            rel="noreferrer"
+                            type="button"
+                            onClick={abrirFormularioProforma}
                         >
-                            Solicitar proforma por WhatsApp
-                        </a>
+                            Solicitar proforma
+                        </button>
                     ) : (
                         <button
                             className="checkout"
@@ -2844,6 +3008,116 @@ Por favor, confírmenme la emisión del comprobante.`;
                     )}
                 </div>
             </aside>
+
+            {proformaAbierta && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 100000,
+                        background: "rgba(4,16,34,.72)",
+                        display: "grid",
+                        placeItems: "center",
+                        padding: 20,
+                    }}
+                    onClick={() => !proformaEnviando && setProformaAbierta(false)}
+                >
+                    <form
+                        onSubmit={enviarSolicitudProforma}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "min(760px, 100%)",
+                            maxHeight: "92vh",
+                            overflowY: "auto",
+                            background: "#fff",
+                            borderRadius: 22,
+                            boxShadow: "0 28px 80px rgba(0,0,0,.35)",
+                        }}
+                    >
+                        <div style={{ padding: "20px 22px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+                            <div>
+                                <small style={{ color: "#64748b", fontWeight: 900 }}>SOLICITUD WEB</small>
+                                <h2 style={{ margin: "4px 0 0" }}>Solicitar proforma</h2>
+                            </div>
+                            <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", cursor: "pointer", fontSize: 20 }}>×</button>
+                        </div>
+
+                        <div style={{ padding: 22 }}>
+                            {proformaMensaje.toLowerCase().includes("registrada correctamente") ? (
+                                <div style={{ padding: 24, textAlign: "center", background: "#ecfdf5", border: "1px solid #bbf7d0", borderRadius: 16 }}>
+                                    <div style={{ fontSize: 42, marginBottom: 8 }}>✓</div>
+                                    <h3 style={{ margin: "0 0 8px", color: "#166534" }}>Solicitud enviada</h3>
+                                    <p style={{ margin: "0 0 18px", color: "#166534" }}>{proformaMensaje}</p>
+                                    <button type="button" className="checkout" onClick={() => setProformaAbierta(false)}>Cerrar</button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                                        {["PERSONA", "EMPRESA"].map((tipo) => (
+                                            <button
+                                                key={tipo}
+                                                type="button"
+                                                onClick={() => actualizarDatoProforma("tipo_cliente", tipo)}
+                                                style={{
+                                                    flex: 1,
+                                                    border: proformaDatos.tipo_cliente === tipo ? "2px solid #1473e6" : "1px solid #cbd5e1",
+                                                    background: proformaDatos.tipo_cliente === tipo ? "#eff6ff" : "#fff",
+                                                    color: "#0f2d55",
+                                                    padding: 12,
+                                                    borderRadius: 12,
+                                                    fontWeight: 900,
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                {tipo === "PERSONA" ? "Persona natural" : "Empresa"}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+                                        {proformaDatos.tipo_cliente === "PERSONA" ? (
+                                            <>
+                                                <input required placeholder="Nombres" value={proformaDatos.nombres} onChange={(e) => actualizarDatoProforma("nombres", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                                <input required placeholder="Apellidos" value={proformaDatos.apellidos} onChange={(e) => actualizarDatoProforma("apellidos", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                                <input required inputMode="numeric" maxLength={8} placeholder="DNI (8 dígitos)" value={proformaDatos.dni} onChange={(e) => actualizarDatoProforma("dni", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <input required placeholder="Razón social" value={proformaDatos.razon_social} onChange={(e) => actualizarDatoProforma("razon_social", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                                <input required inputMode="numeric" maxLength={11} placeholder="RUC (11 dígitos)" value={proformaDatos.ruc} onChange={(e) => actualizarDatoProforma("ruc", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                            </>
+                                        )}
+                                        <input required placeholder="Teléfono" value={proformaDatos.telefono} onChange={(e) => actualizarDatoProforma("telefono", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                        <input required type="email" placeholder="Correo electrónico" value={proformaDatos.correo} onChange={(e) => actualizarDatoProforma("correo", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                        <input placeholder="Dirección" value={proformaDatos.direccion} onChange={(e) => actualizarDatoProforma("direccion", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, gridColumn: "1 / -1" }} />
+                                        <textarea placeholder="Observaciones (opcional)" value={proformaDatos.observaciones} onChange={(e) => actualizarDatoProforma("observaciones", e.target.value)} rows={3} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, resize: "vertical", gridColumn: "1 / -1" }} />
+                                    </div>
+
+                                    <div style={{ marginTop: 18, padding: 14, background: "#f8fafc", borderRadius: 12 }}>
+                                        <b>{cantidadTotal} producto{cantidadTotal !== 1 ? "s" : ""} en la solicitud</b>
+                                        <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
+                                            {itemsCarrito.map((item) => `${item.nombre} x${item.cantidad}`).join(" · ")}
+                                        </div>
+                                    </div>
+
+                                    {proformaMensaje && (
+                                        <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontWeight: 800 }}>
+                                            {proformaMensaje}
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18, flexWrap: "wrap" }}>
+                                        <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 10, padding: "12px 16px", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>
+                                        <button type="submit" disabled={proformaEnviando} className="checkout" style={{ width: "auto", minWidth: 210, opacity: proformaEnviando ? .65 : 1 }}>
+                                            {proformaEnviando ? "Enviando..." : "Enviar solicitud de proforma"}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </form>
+                </div>
+            )}
 
             <div className={`toast ${toast ? "show" : ""}`}>
                 <span className="tic">✓</span> {toast}

@@ -4402,7 +4402,302 @@ app.patch(
         }
     }
 );
+// =========================================================
+// ADMIN - GENERAR PEDIDO DESDE COTIZACIÓN APROBADA
+// =========================================================
 
+app.post(
+    "/admin/cotizaciones/:id/generar-pedido",
+    verificarAdmin,
+    async (req, res) => {
+        const conexion = await pool.connect();
+
+        try {
+            const cotizacionId = Number(req.params.id);
+
+            if (!Number.isInteger(cotizacionId) || cotizacionId <= 0) {
+                return res.status(400).json({
+                    error: "ID de cotización inválido",
+                });
+            }
+
+            await conexion.query("BEGIN");
+
+            // =====================================================
+            // OBTENER COTIZACIÓN
+            // =====================================================
+
+            const resultadoCotizacion = await conexion.query(
+                `
+                SELECT
+                    id,
+                    cliente_id,
+                    codigo,
+                    estado,
+                    subtotal,
+                    igv,
+                    total,
+                    observaciones
+                FROM cotizaciones
+                WHERE id = $1
+                FOR UPDATE
+                `,
+                [cotizacionId]
+            );
+
+            if (resultadoCotizacion.rowCount === 0) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(404).json({
+                    error: "Cotización no encontrada",
+                });
+            }
+
+            const cotizacion = resultadoCotizacion.rows[0];
+
+            // =====================================================
+            // VALIDAR QUE ESTÉ APROBADA
+            // =====================================================
+
+            if (
+                String(cotizacion.estado || "").toUpperCase() !==
+                "APROBADA"
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "Solo se puede generar un pedido desde una cotización aprobada",
+                });
+            }
+
+            // =====================================================
+            // EVITAR PEDIDOS DUPLICADOS
+            // =====================================================
+
+            const pedidoExistente = await conexion.query(
+                `
+                SELECT
+                    id,
+                    codigo,
+                    estado
+                FROM pedidos
+                WHERE cotizacion_id = $1
+                LIMIT 1
+                `,
+                [cotizacionId]
+            );
+
+            if (pedidoExistente.rowCount > 0) {
+                await conexion.query("COMMIT");
+
+                return res.status(200).json({
+                    mensaje:
+                        "El pedido ya había sido generado anteriormente",
+                    pedido: pedidoExistente.rows[0],
+                    existente: true,
+                });
+            }
+
+            // =====================================================
+            // VALIDAR TOTALES
+            // =====================================================
+
+            if (
+                cotizacion.subtotal === null ||
+                cotizacion.igv === null ||
+                cotizacion.total === null
+            ) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "La cotización no tiene los importes calculados",
+                });
+            }
+
+            // =====================================================
+            // OBTENER PRODUCTOS COTIZADOS
+            // =====================================================
+
+            const resultadoProductos = await conexion.query(
+                `
+                SELECT
+                    dc.producto_id,
+                    dc.cantidad,
+                    dc.precio_unitario,
+                    dc.subtotal
+                FROM detalle_cotizacion dc
+                WHERE dc.cotizacion_id = $1
+                ORDER BY dc.id ASC
+                `,
+                [cotizacionId]
+            );
+
+            if (resultadoProductos.rowCount === 0) {
+                await conexion.query("ROLLBACK");
+
+                return res.status(400).json({
+                    error:
+                        "La cotización no contiene productos",
+                });
+            }
+
+            for (const producto of resultadoProductos.rows) {
+                if (
+                    producto.precio_unitario === null ||
+                    producto.subtotal === null
+                ) {
+                    await conexion.query("ROLLBACK");
+
+                    return res.status(400).json({
+                        error:
+                            "Todos los productos deben tener precio antes de generar el pedido",
+                    });
+                }
+            }
+
+            // =====================================================
+            // CREAR CÓDIGO DEL PEDIDO
+            // =====================================================
+
+            const anio = new Date().getFullYear();
+            const timestamp = Date.now();
+            const aleatorio = Math.floor(
+                Math.random() * 900 + 100
+            );
+
+            const codigoPedido =
+                `PED-${anio}-${timestamp}-${aleatorio}`;
+
+            // =====================================================
+            // CREAR PEDIDO
+            // =====================================================
+
+            const resultadoPedido = await conexion.query(
+                `
+                INSERT INTO pedidos (
+                    cotizacion_id,
+                    cliente_id,
+                    codigo,
+                    estado,
+                    subtotal,
+                    igv,
+                    total,
+                    observaciones,
+                    fecha_pedido,
+                    fecha_actualizacion
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    $3,
+                    'PENDIENTE',
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    NOW(),
+                    NOW()
+                )
+                RETURNING
+                    id,
+                    cotizacion_id,
+                    cliente_id,
+                    codigo,
+                    estado,
+                    subtotal,
+                    igv,
+                    total,
+                    observaciones,
+                    fecha_pedido,
+                    fecha_actualizacion
+                `,
+                [
+                    cotizacion.id,
+                    cotizacion.cliente_id,
+                    codigoPedido,
+                    cotizacion.subtotal,
+                    cotizacion.igv,
+                    cotizacion.total,
+                    cotizacion.observaciones,
+                ]
+            );
+
+            const pedido = resultadoPedido.rows[0];
+
+            // =====================================================
+            // COPIAR DETALLE DE COTIZACIÓN AL PEDIDO
+            // =====================================================
+
+            for (const producto of resultadoProductos.rows) {
+                await conexion.query(
+                    `
+                    INSERT INTO detalle_pedido (
+                        pedido_id,
+                        producto_id,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
+                    )
+                    VALUES (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5
+                    )
+                    `,
+                    [
+                        pedido.id,
+                        producto.producto_id,
+                        producto.cantidad,
+                        producto.precio_unitario,
+                        producto.subtotal,
+                    ]
+                );
+            }
+
+            await conexion.query("COMMIT");
+
+            res.status(201).json({
+                mensaje:
+                    "Pedido generado correctamente",
+                pedido: {
+                    ...pedido,
+                    subtotal: Number(pedido.subtotal),
+                    igv: Number(pedido.igv),
+                    total: Number(pedido.total),
+                },
+                existente: false,
+            });
+
+        } catch (error) {
+            try {
+                await conexion.query("ROLLBACK");
+            } catch (rollbackError) {
+                console.error(
+                    "Error al realizar rollback:",
+                    rollbackError
+                );
+            }
+
+            console.error(
+                "Error al generar pedido desde cotización:",
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    "Error al generar pedido desde la cotización",
+                detalle: error.message,
+            });
+
+        } finally {
+            conexion.release();
+        }
+    }
+);
 // =========================================================
 // INICIAR SERVIDOR
 // =========================================================
