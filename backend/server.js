@@ -1,4 +1,6 @@
 ﻿const express = require("express");
+const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit");
 const cors = require("cors");
 const { Pool } = require("pg");
 const jwt = require("jsonwebtoken");
@@ -4695,6 +4697,515 @@ app.post(
 
         } finally {
             conexion.release();
+        }
+    }
+);
+// =========================================================
+// GENERAR PDF DE COTIZACIÓN
+// =========================================================
+
+function generarPdfCotizacion(cotizacion) {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({
+                size: "A4",
+                margin: 45,
+            });
+
+            const partes = [];
+
+            doc.on("data", (chunk) => partes.push(chunk));
+            doc.on("end", () => resolve(Buffer.concat(partes)));
+            doc.on("error", reject);
+
+            const dinero = (valor) =>
+                `S/ ${Number(valor || 0).toFixed(2)}`;
+
+            const cliente =
+                cotizacion.tipo_cliente === "EMPRESA"
+                    ? cotizacion.razon_social
+                    : `${cotizacion.nombres || ""} ${cotizacion.apellidos || ""}`.trim();
+
+            const documento =
+                cotizacion.tipo_cliente === "EMPRESA"
+                    ? cotizacion.ruc
+                    : cotizacion.dni;
+
+            // ENCABEZADO
+            doc
+                .fontSize(22)
+                .font("Helvetica-Bold")
+                .text("INGEDATA S.A.C.", {
+                    align: "left",
+                });
+
+            doc
+                .fontSize(10)
+                .font("Helvetica")
+                .fillColor("#4b5563")
+                .text(
+                    "Tecnología · Infraestructura · Ingeniería"
+                )
+                .text("RUC: 20613136054")
+                .text(
+                    "Correo: jdiego@ingedataa.com"
+                );
+
+            doc
+                .moveDown()
+                .fillColor("#000000")
+                .fontSize(18)
+                .font("Helvetica-Bold")
+                .text("COTIZACIÓN / PROFORMA", {
+                    align: "right",
+                });
+
+            doc
+                .fontSize(11)
+                .font("Helvetica")
+                .text(
+                    `Código: ${cotizacion.codigo}`,
+                    { align: "right" }
+                )
+                .text(
+                    `Fecha: ${new Date().toLocaleDateString(
+                        "es-PE"
+                    )}`,
+                    { align: "right" }
+                );
+
+            doc.moveDown(2);
+
+            // CLIENTE
+            doc
+                .fontSize(12)
+                .font("Helvetica-Bold")
+                .text("DATOS DEL CLIENTE");
+
+            doc
+                .fontSize(10)
+                .font("Helvetica")
+                .text(`Cliente: ${cliente}`)
+                .text(`Documento: ${documento || "-"}`)
+                .text(
+                    `Correo: ${cotizacion.correo || "-"}`
+                )
+                .text(
+                    `Teléfono: ${cotizacion.telefono || "-"}`
+                )
+                .text(
+                    `Dirección: ${cotizacion.direccion || "-"}`
+                );
+
+            doc.moveDown(1.5);
+
+            // PRODUCTOS
+            doc
+                .fontSize(12)
+                .font("Helvetica-Bold")
+                .text("DETALLE DE LA COTIZACIÓN");
+
+            doc.moveDown(0.5);
+
+            const xProducto = 45;
+            const xCantidad = 330;
+            const xPrecio = 400;
+            const xSubtotal = 485;
+
+            let y = doc.y;
+
+            doc
+                .fontSize(9)
+                .font("Helvetica-Bold")
+                .text("Producto", xProducto, y)
+                .text("Cant.", xCantidad, y)
+                .text("P. Unit.", xPrecio, y)
+                .text("Subtotal", xSubtotal, y);
+
+            y += 20;
+
+            doc
+                .moveTo(45, y - 5)
+                .lineTo(550, y - 5)
+                .strokeColor("#d1d5db")
+                .stroke();
+
+            for (const producto of cotizacion.productos) {
+                if (y > 700) {
+                    doc.addPage();
+                    y = 50;
+                }
+
+                const subtotal =
+                    Number(producto.precio_unitario) *
+                    Number(producto.cantidad);
+
+                doc
+                    .fontSize(9)
+                    .font("Helvetica")
+                    .fillColor("#000000")
+                    .text(
+                        producto.nombre,
+                        xProducto,
+                        y,
+                        {
+                            width: 270,
+                        }
+                    )
+                    .text(
+                        String(producto.cantidad),
+                        xCantidad,
+                        y
+                    )
+                    .text(
+                        dinero(producto.precio_unitario),
+                        xPrecio,
+                        y
+                    )
+                    .text(
+                        dinero(subtotal),
+                        xSubtotal,
+                        y
+                    );
+
+                y += 32;
+            }
+
+            doc.y = y + 10;
+
+            // TOTALES
+            doc
+                .fontSize(10)
+                .font("Helvetica")
+                .text(
+                    `Subtotal: ${dinero(
+                        cotizacion.subtotal
+                    )}`,
+                    {
+                        align: "right",
+                    }
+                )
+                .text(
+                    `IGV (18%): ${dinero(
+                        cotizacion.igv
+                    )}`,
+                    {
+                        align: "right",
+                    }
+                );
+
+            doc
+                .fontSize(14)
+                .font("Helvetica-Bold")
+                .text(
+                    `TOTAL: ${dinero(
+                        cotizacion.total
+                    )}`,
+                    {
+                        align: "right",
+                    }
+                );
+
+            doc.moveDown(2);
+
+            doc
+                .fontSize(10)
+                .font("Helvetica-Bold")
+                .text("CONDICIONES COMERCIALES");
+
+            doc
+                .fontSize(9)
+                .font("Helvetica")
+                .text(
+                    "• Cotización válida por 7 días calendario."
+                )
+                .text(
+                    "• Precios expresados en soles e incluyen IGV."
+                )
+                .text(
+                    "• Disponibilidad y plazo de entrega sujetos a confirmación."
+                );
+
+            if (cotizacion.observaciones) {
+                doc.moveDown();
+
+                doc
+                    .font("Helvetica-Bold")
+                    .text("Observaciones:");
+
+                doc
+                    .font("Helvetica")
+                    .text(cotizacion.observaciones);
+            }
+
+            doc.moveDown(3);
+
+            doc
+                .fontSize(8)
+                .fillColor("#6b7280")
+                .text(
+                    "Documento generado automáticamente por el sistema de cotizaciones de INGEDATA S.A.C.",
+                    {
+                        align: "center",
+                    }
+                );
+
+            doc.end();
+
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+
+// =========================================================
+// ADMIN - ENVIAR COTIZACIÓN POR CORREO
+// =========================================================
+
+app.post(
+    "/admin/cotizaciones/:id/enviar-correo",
+    verificarAdmin,
+    async (req, res) => {
+        try {
+            const id = Number(req.params.id);
+
+            if (!Number.isInteger(id) || id <= 0) {
+                return res.status(400).json({
+                    error: "ID de cotización inválido",
+                });
+            }
+
+            // OBTENER COTIZACIÓN + CLIENTE
+            const resultadoCotizacion =
+                await pool.query(
+                    `
+                    SELECT
+                        c.id,
+                        c.codigo,
+                        c.estado,
+                        c.subtotal,
+                        c.igv,
+                        c.total,
+                        c.observaciones,
+
+                        cl.tipo_cliente,
+                        cl.nombres,
+                        cl.apellidos,
+                        cl.dni,
+                        cl.razon_social,
+                        cl.ruc,
+                        cl.telefono,
+                        cl.correo,
+                        cl.direccion
+
+                    FROM cotizaciones c
+
+                    INNER JOIN clientes cl
+                        ON cl.id = c.cliente_id
+
+                    WHERE c.id = $1
+
+                    LIMIT 1
+                    `,
+                    [id]
+                );
+
+            if (
+                resultadoCotizacion.rowCount === 0
+            ) {
+                return res.status(404).json({
+                    error:
+                        "Cotización no encontrada",
+                });
+            }
+
+            const cotizacion =
+                resultadoCotizacion.rows[0];
+
+            if (!cotizacion.correo) {
+                return res.status(400).json({
+                    error:
+                        "El cliente no tiene correo registrado",
+                });
+            }
+
+            if (
+                cotizacion.subtotal === null ||
+                cotizacion.igv === null ||
+                cotizacion.total === null
+            ) {
+                return res.status(400).json({
+                    error:
+                        "Primero debes guardar los precios de la cotización",
+                });
+            }
+
+            // OBTENER PRODUCTOS
+            const resultadoProductos =
+                await pool.query(
+                    `
+                    SELECT
+                        dc.id,
+                        dc.producto_id,
+                        p.nombre,
+                        p.marca,
+                        dc.cantidad,
+                        dc.precio_unitario,
+                        dc.subtotal
+
+                    FROM detalle_cotizacion dc
+
+                    INNER JOIN productos p
+                        ON p.id = dc.producto_id
+
+                    WHERE dc.cotizacion_id = $1
+
+                    ORDER BY dc.id ASC
+                    `,
+                    [id]
+                );
+
+            const datosPdf = {
+                ...cotizacion,
+                productos:
+                    resultadoProductos.rows,
+            };
+
+            const pdfBuffer =
+                await generarPdfCotizacion(
+                    datosPdf
+                );
+
+            // CONFIGURACIÓN SMTP
+            const transporter =
+                nodemailer.createTransport({
+                    host: process.env.SMTP_HOST,
+                    port: Number(
+                        process.env.SMTP_PORT || 587
+                    ),
+                    secure:
+                        String(
+                            process.env.SMTP_SECURE
+                        ).toLowerCase() ===
+                        "true",
+
+                    auth: {
+                        user:
+                            process.env.SMTP_USER,
+                        pass:
+                            process.env.SMTP_PASS,
+                    },
+                });
+
+            const nombreCliente =
+                cotizacion.tipo_cliente ===
+                    "EMPRESA"
+                    ? cotizacion.razon_social
+                    : `${cotizacion.nombres || ""} ${cotizacion.apellidos || ""}`.trim();
+
+            await transporter.sendMail({
+                from:
+                    process.env.SMTP_FROM ||
+                    process.env.SMTP_USER,
+
+                to: cotizacion.correo,
+
+                subject:
+                    `Cotización ${cotizacion.codigo} - INGEDATA S.A.C.`,
+
+                html: `
+                    <div style="
+                        font-family:Arial,sans-serif;
+                        max-width:650px;
+                        margin:auto;
+                        color:#1f2937;
+                    ">
+                        <h2 style="color:#0c4a8a;">
+                            INGEDATA S.A.C.
+                        </h2>
+
+                        <p>
+                            Estimado(a)
+                            <strong>${nombreCliente}</strong>,
+                        </p>
+
+                        <p>
+                            Gracias por solicitar una cotización
+                            mediante nuestra página web.
+                        </p>
+
+                        <p>
+                            Adjuntamos la proforma
+                            <strong>${cotizacion.codigo}</strong>
+                            con el detalle de los productos,
+                            cantidades y precios solicitados.
+                        </p>
+
+                        <div style="
+                            background:#f4f7fb;
+                            padding:18px;
+                            border-radius:10px;
+                            margin:20px 0;
+                        ">
+                            <strong>
+                                Total cotizado:
+                                S/ ${Number(
+                    cotizacion.total
+                ).toFixed(2)}
+                            </strong>
+                        </div>
+
+                        <p>
+                            La cotización tiene una vigencia
+                            de 7 días calendario.
+                        </p>
+
+                        <p>
+                            Si desea confirmar el pedido o
+                            realizar alguna consulta, puede
+                            responder directamente a este correo.
+                        </p>
+
+                        <br>
+
+                        <p>
+                            Atentamente,<br>
+                            <strong>INGEDATA S.A.C.</strong><br>
+                            Tecnología · Infraestructura · Ingeniería
+                        </p>
+                    </div>
+                `,
+
+                attachments: [
+                    {
+                        filename:
+                            `Cotizacion-${cotizacion.codigo}.pdf`,
+                        content: pdfBuffer,
+                        contentType:
+                            "application/pdf",
+                    },
+                ],
+            });
+
+            res.json({
+                mensaje:
+                    "Cotización enviada correctamente al correo del cliente",
+                correo: cotizacion.correo,
+                codigo: cotizacion.codigo,
+            });
+
+        } catch (error) {
+            console.error(
+                "Error al enviar cotización:",
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    "No se pudo enviar la cotización por correo",
+                detalle: error.message,
+            });
         }
     }
 );

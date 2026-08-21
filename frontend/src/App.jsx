@@ -1,7 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = (
+    import.meta.env.VITE_API_URL || "http://localhost:3000"
+).replace(/\/+$/, "");
 
 const API_PRODUCTOS = `${API_BASE_URL}/productos`;
 const API_SOLICITUDES_PROFORMA = `${API_BASE_URL}/solicitudes-proforma`;
@@ -516,6 +518,7 @@ function App() {
     const [adminDetalleCargando, setAdminDetalleCargando] = useState(false);
     const [adminPrecios, setAdminPrecios] = useState({});
     const [adminGuardandoCotizacion, setAdminGuardandoCotizacion] = useState(false);
+    const [adminEnviandoCotizacion, setAdminEnviandoCotizacion] = useState(false);
     const [adminCotizacionMensaje, setAdminCotizacionMensaje] = useState("");
     const [productos, setProductos] = useState([]);
     const [cargandoProductos, setCargandoProductos] = useState(true);
@@ -1299,7 +1302,69 @@ Por favor, confírmenme la emisión del comprobante.`;
             setAdminGuardandoCotizacion(false);
         }
     };
+    const enviarCotizacionCorreoAdmin = async () => {
+        if (
+            !adminToken ||
+            !adminCotizacionSeleccionada?.id
+        ) {
+            return;
+        }
 
+        try {
+            setAdminEnviandoCotizacion(true);
+            setAdminCotizacionMensaje("");
+
+            const respuesta = await fetch(
+                `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/enviar-correo`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization:
+                            `Bearer ${adminToken}`,
+                    },
+                }
+            );
+
+            const data = await respuesta.json();
+
+            if (
+                respuesta.status === 401 ||
+                respuesta.status === 403
+            ) {
+                localStorage.removeItem(
+                    "ingedata_admin_token"
+                );
+
+                setAdminToken("");
+                setAdminUsuario(null);
+
+                throw new Error(
+                    "Tu sesión expiró. Inicia sesión nuevamente."
+                );
+            }
+
+            if (!respuesta.ok) {
+                throw new Error(
+                    data.error ||
+                    data.detalle ||
+                    "No se pudo enviar la cotización"
+                );
+            }
+
+            setAdminCotizacionMensaje(
+                `Cotización enviada correctamente a ${data.correo}`
+            );
+
+        } catch (error) {
+            setAdminCotizacionMensaje(
+                error.message ||
+                "Error al enviar la cotización"
+            );
+
+        } finally {
+            setAdminEnviandoCotizacion(false);
+        }
+    };
     const iniciarSesionAdmin = async (e) => {
         e.preventDefault();
 
@@ -1872,8 +1937,35 @@ Por favor, confírmenme la emisión del comprobante.`;
                                                             : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
                                                                 ? "Guardar cambios"
                                                                 : "Guardar cotización"}
+                                                </button>
+                                                    {String(
+                                                        adminCotizacionSeleccionada.estado || ""
+                                                    ).toUpperCase() === "COTIZADA" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={enviarCotizacionCorreoAdmin}
+                                                        disabled={adminEnviandoCotizacion}
+                                                        style={{
+                                                            border: "1px solid #bfdbfe",
+                                                            borderRadius: "10px",
+                                                            padding: "12px 16px",
+                                                            background: "#dbeafe",
+                                                            color: "#1d4ed8",
+                                                            fontWeight: 800,
+                                                            cursor: adminEnviandoCotizacion
+                                                                ? "not-allowed"
+                                                                : "pointer",
+                                                            opacity: adminEnviandoCotizacion
+                                                                ? 0.6
+                                                                : 1,
+                                                        }}
+                                                    >
+                                                        {adminEnviandoCotizacion
+                                                            ? "Enviando..."
+                                                            : "📧 Enviar proforma al cliente"}
                                                     </button>
                                                 )}
+                                                
                                         </div>
                                     </>
                                 )}
