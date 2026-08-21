@@ -518,7 +518,7 @@ function App() {
     const [adminDetalleCargando, setAdminDetalleCargando] = useState(false);
     const [adminPrecios, setAdminPrecios] = useState({});
     const [adminGuardandoCotizacion, setAdminGuardandoCotizacion] = useState(false);
-    const [adminEnviandoCotizacion, setAdminEnviandoCotizacion] = useState(false);
+    const [adminDescargandoPdf, setAdminDescargandoPdf] = useState(false);
     const [adminCotizacionMensaje, setAdminCotizacionMensaje] = useState("");
     const [productos, setProductos] = useState([]);
     const [cargandoProductos, setCargandoProductos] = useState(true);
@@ -1302,7 +1302,7 @@ Por favor, confírmenme la emisión del comprobante.`;
             setAdminGuardandoCotizacion(false);
         }
     };
-    const enviarCotizacionCorreoAdmin = async () => {
+    const descargarProformaPdfAdmin = async () => {
         if (
             !adminToken ||
             !adminCotizacionSeleccionada?.id
@@ -1311,21 +1311,19 @@ Por favor, confírmenme la emisión del comprobante.`;
         }
 
         try {
-            setAdminEnviandoCotizacion(true);
+            setAdminDescargandoPdf(true);
             setAdminCotizacionMensaje("");
 
             const respuesta = await fetch(
-                `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/enviar-correo`,
+                `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/pdf`,
                 {
-                    method: "POST",
+                    method: "GET",
                     headers: {
                         Authorization:
                             `Bearer ${adminToken}`,
                     },
                 }
             );
-
-            const data = await respuesta.json();
 
             if (
                 respuesta.status === 401 ||
@@ -1344,660 +1342,1700 @@ Por favor, confírmenme la emisión del comprobante.`;
             }
 
             if (!respuesta.ok) {
-                throw new Error(
-                    data.error ||
-                    data.detalle ||
-                    "No se pudo enviar la cotización"
-                );
+                let mensaje =
+                    "No se pudo descargar la proforma";
+
+                try {
+                    const data =
+                        await respuesta.json();
+
+                    mensaje =
+                        data.error ||
+                        data.detalle ||
+                        mensaje;
+                } catch {
+                    // respuesta no JSON
+                }
+
+                throw new Error(mensaje);
             }
 
+            const blob =
+                await respuesta.blob();
+
+            const url =
+                window.URL.createObjectURL(blob);
+
+            const enlace =
+                document.createElement("a");
+
+            enlace.href = url;
+
+            enlace.download =
+                `Cotizacion-${adminCotizacionSeleccionada.codigo}.pdf`;
+
+            document.body.appendChild(enlace);
+
+            enlace.click();
+            enlace.remove();
+
+            window.URL.revokeObjectURL(url);
+
             setAdminCotizacionMensaje(
-                `Cotización enviada correctamente a ${data.correo}`
+                "Proforma PDF descargada correctamente."
             );
 
         } catch (error) {
             setAdminCotizacionMensaje(
                 error.message ||
-                "Error al enviar la cotización"
+                "Error al descargar la proforma"
             );
 
         } finally {
-            setAdminEnviandoCotizacion(false);
+            setAdminDescargandoPdf(false);
         }
     };
-    const iniciarSesionAdmin = async (e) => {
-        e.preventDefault();
+    const enviarCotizacionCorreoAdmin = async () => {
+    if (
+        !adminToken ||
+        !adminCotizacionSeleccionada?.id
+    ) {
+        return;
+    }
 
-        try {
-            setAdminCargando(true);
-            setAdminError("");
+    try {
+        setAdminEnviandoCotizacion(true);
+        setAdminCotizacionMensaje("");
 
-            const respuesta = await fetch(API_ADMIN_LOGIN, {
+        const respuesta = await fetch(
+            `${API_ADMIN_COTIZACIONES}/${adminCotizacionSeleccionada.id}/enviar-correo`,
+            {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
+                    Authorization:
+                        `Bearer ${adminToken}`,
                 },
-                body: JSON.stringify({
-                    correo: adminCorreo.trim(),
-                    password: adminPassword,
-                }),
-            });
-
-            const data = await respuesta.json();
-
-            if (!respuesta.ok) {
-                throw new Error(data.error || "No se pudo iniciar sesión");
             }
+        );
 
-            localStorage.setItem("ingedata_admin_token", data.token);
-            setAdminToken(data.token);
-            setAdminUsuario(data.administrador);
-            setAdminPassword("");
-            await cargarCotizacionesAdmin(data.token);
-        } catch (error) {
-            setAdminError(error.message);
-        } finally {
-            setAdminCargando(false);
-        }
-    };
+        const data = await respuesta.json();
 
-    const cerrarSesionAdmin = () => {
-        localStorage.removeItem("ingedata_admin_token");
-        setAdminToken("");
-        setAdminUsuario(null);
-        setAdminCotizaciones([]);
-        setAdminCotizacionSeleccionada(null);
-        setAdminPrecios({});
-        setAdminCotizacionMensaje("");
-        setAdminError("");
-        setAdminCotizacionesError("");
-    };
+        if (
+            respuesta.status === 401 ||
+            respuesta.status === 403
+        ) {
+            localStorage.removeItem(
+                "ingedata_admin_token"
+            );
 
-    useEffect(() => {
-        if (esRutaAdmin && adminToken) {
-            cargarCotizacionesAdmin(adminToken);
-            cargarPedidosAdmin(adminToken);
-        }
-    }, [esRutaAdmin, adminToken]);
-    if (esRutaAdmin) {
-        const pendientes = adminCotizaciones.filter(
-            (c) => String(c.estado || "").toUpperCase() === "PENDIENTE"
-        ).length;
+            setAdminToken("");
+            setAdminUsuario(null);
 
-        const personas = adminCotizaciones.filter(
-            (c) => c.cliente?.tipo_cliente === "PERSONA"
-        ).length;
-
-        const empresas = adminCotizaciones.filter(
-            (c) => c.cliente?.tipo_cliente === "EMPRESA"
-        ).length;
-
-        const cotizadas = adminCotizaciones.filter(
-            (c) => String(c.estado || "").toUpperCase() === "COTIZADA"
-        ).length;
-
-        const aprobadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "APROBADA").length;
-        const rechazadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "RECHAZADA").length;
-        const pedidosPendientes = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "PENDIENTE").length;
-        const pedidosProceso = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "EN_PROCESO").length;
-        const pedidosCompletados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "COMPLETADO").length;
-        const pedidosCancelados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "CANCELADO").length;
-
-        const estilos = {
-            pagina: { minHeight: "100vh", background: "#f4f7fb", color: "#10233f", fontFamily: "Arial, sans-serif" },
-            loginPagina: { minHeight: "100vh", display: "grid", placeItems: "center", padding: "28px", background: "linear-gradient(135deg,#071a34 0%,#0c2d57 55%,#0e4f9d 100%)" },
-            loginCard: { width: "min(440px, 100%)", background: "#fff", borderRadius: "24px", padding: "34px", boxShadow: "0 28px 70px rgba(0,0,0,.28)" },
-            logoLogin: { width: "230px", maxWidth: "100%", height: "72px", objectFit: "contain", display: "block", margin: "0 auto 22px" },
-            etiqueta: { display: "block", fontSize: "13px", fontWeight: 800, marginBottom: "7px", color: "#334155" },
-            input: { width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "13px 14px", fontSize: "15px", outline: "none" },
-            botonAzul: { border: 0, borderRadius: "10px", padding: "10px 14px", fontWeight: 800, cursor: "pointer", background: "#1473e6", color: "#fff" },
-            sidebar: { width: "250px", background: "#081d38", color: "#fff", minHeight: "100vh", padding: "24px 18px", boxSizing: "border-box" },
-            contenido: { flex: 1, padding: "30px", minWidth: 0 },
-            tarjeta: { background: "#fff", borderRadius: "16px", boxShadow: "0 8px 24px rgba(15,23,42,.07)", border: "1px solid #e7edf5" },
-            stat: { background: "#fff", borderRadius: "16px", padding: "20px", boxShadow: "0 8px 24px rgba(15,23,42,.06)", border: "1px solid #e7edf5" },
-            navItem: { display: "flex", gap: "10px", alignItems: "center", width: "100%", padding: "12px 13px", border: 0, borderRadius: "10px", background: "rgba(255,255,255,.08)", color: "#fff", fontWeight: 700, textAlign: "left", marginBottom: "8px", cursor: "pointer" },
-            badge: { display: "inline-flex", padding: "5px 10px", borderRadius: "999px", background: "#fff7d6", color: "#8a6500", fontSize: "12px", fontWeight: 800 },
-            precioInput: { width: "120px", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "9px", padding: "9px 10px", fontSize: "14px", outline: "none" },
-            resumenTotal: { display: "grid", gridTemplateColumns: "1fr auto", gap: "8px 22px", marginLeft: "auto", width: "min(340px, 100%)", padding: "18px", background: "#f8fafc", border: "1px solid #e7edf5", borderRadius: "14px" },
-        };
-
-        if (!adminToken) {
-            return (
-                <div style={estilos.loginPagina}>
-                    <div style={estilos.loginCard}>
-                        <ImagenRecurso
-                            imagenes={[img("logo-ingedata-nuevo.jpeg")]}
-                            alt="INGEDATA"
-                            style={estilos.logoLogin}
-                        />
-
-                        <div style={{ textAlign: "center", marginBottom: "26px" }}>
-                            <div style={{ color: "#1473e6", fontWeight: 900, letterSpacing: "1.5px", fontSize: "12px", marginBottom: "8px" }}>
-                                PANEL ADMINISTRATIVO
-                            </div>
-                            <h1 style={{ margin: "0 0 8px", fontSize: "28px" }}>Iniciar sesión</h1>
-                            <p style={{ margin: 0, color: "#64748b", lineHeight: 1.55 }}>
-                                Acceso exclusivo para la administración de INGEDATA.
-                            </p>
-                        </div>
-
-                        <form onSubmit={iniciarSesionAdmin}>
-                            <div style={{ marginBottom: "16px" }}>
-                                <label style={estilos.etiqueta}>Correo electrónico</label>
-                                <input
-                                    style={estilos.input}
-                                    type="email"
-                                    placeholder="admin@ingedata.com"
-                                    value={adminCorreo}
-                                    onChange={(e) => setAdminCorreo(e.target.value)}
-                                    autoComplete="username"
-                                    required
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: "18px" }}>
-                                <label style={estilos.etiqueta}>Contraseña</label>
-                                <input
-                                    style={estilos.input}
-                                    type="password"
-                                    placeholder="Ingresa tu contraseña"
-                                    value={adminPassword}
-                                    onChange={(e) => setAdminPassword(e.target.value)}
-                                    autoComplete="current-password"
-                                    required
-                                />
-                            </div>
-
-                            {adminError && (
-                                <div style={{ padding: "11px 13px", marginBottom: "15px", borderRadius: "10px", background: "#fff1f2", color: "#be123c", fontSize: "13px", fontWeight: 700 }}>
-                                    {adminError}
-                                </div>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={adminCargando}
-                                style={{ ...estilos.botonAzul, width: "100%", padding: "14px 16px", opacity: adminCargando ? 0.7 : 1 }}
-                            >
-                                {adminCargando ? "Ingresando..." : "Iniciar sesión"}
-                            </button>
-                        </form>
-                    </div>
-                </div>
+            throw new Error(
+                "Tu sesión expiró. Inicia sesión nuevamente."
             );
         }
 
+        if (!respuesta.ok) {
+            throw new Error(
+                data.error ||
+                data.detalle ||
+                "No se pudo enviar la cotización"
+            );
+        }
+
+        setAdminCotizacionMensaje(
+            `Cotización enviada correctamente a ${data.correo}`
+        );
+
+    } catch (error) {
+        setAdminCotizacionMensaje(
+            error.message ||
+            "Error al enviar la cotización"
+        );
+
+    } finally {
+        setAdminEnviandoCotizacion(false);
+    }
+};
+const iniciarSesionAdmin = async (e) => {
+    e.preventDefault();
+
+    try {
+        setAdminCargando(true);
+        setAdminError("");
+
+        const respuesta = await fetch(API_ADMIN_LOGIN, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                correo: adminCorreo.trim(),
+                password: adminPassword,
+            }),
+        });
+
+        const data = await respuesta.json();
+
+        if (!respuesta.ok) {
+            throw new Error(data.error || "No se pudo iniciar sesión");
+        }
+
+        localStorage.setItem("ingedata_admin_token", data.token);
+        setAdminToken(data.token);
+        setAdminUsuario(data.administrador);
+        setAdminPassword("");
+        await cargarCotizacionesAdmin(data.token);
+    } catch (error) {
+        setAdminError(error.message);
+    } finally {
+        setAdminCargando(false);
+    }
+};
+
+const cerrarSesionAdmin = () => {
+    localStorage.removeItem("ingedata_admin_token");
+    setAdminToken("");
+    setAdminUsuario(null);
+    setAdminCotizaciones([]);
+    setAdminCotizacionSeleccionada(null);
+    setAdminPrecios({});
+    setAdminCotizacionMensaje("");
+    setAdminError("");
+    setAdminCotizacionesError("");
+};
+
+useEffect(() => {
+    if (esRutaAdmin && adminToken) {
+        cargarCotizacionesAdmin(adminToken);
+        cargarPedidosAdmin(adminToken);
+    }
+}, [esRutaAdmin, adminToken]);
+if (esRutaAdmin) {
+    const pendientes = adminCotizaciones.filter(
+        (c) => String(c.estado || "").toUpperCase() === "PENDIENTE"
+    ).length;
+
+    const personas = adminCotizaciones.filter(
+        (c) => c.cliente?.tipo_cliente === "PERSONA"
+    ).length;
+
+    const empresas = adminCotizaciones.filter(
+        (c) => c.cliente?.tipo_cliente === "EMPRESA"
+    ).length;
+
+    const cotizadas = adminCotizaciones.filter(
+        (c) => String(c.estado || "").toUpperCase() === "COTIZADA"
+    ).length;
+
+    const aprobadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "APROBADA").length;
+    const rechazadas = adminCotizaciones.filter((c) => String(c.estado || "").toUpperCase() === "RECHAZADA").length;
+    const pedidosPendientes = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "PENDIENTE").length;
+    const pedidosProceso = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "EN_PROCESO").length;
+    const pedidosCompletados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "COMPLETADO").length;
+    const pedidosCancelados = adminPedidos.filter((p) => String(p.estado || "").toUpperCase() === "CANCELADO").length;
+
+    const estilos = {
+        pagina: { minHeight: "100vh", background: "#f4f7fb", color: "#10233f", fontFamily: "Arial, sans-serif" },
+        loginPagina: { minHeight: "100vh", display: "grid", placeItems: "center", padding: "28px", background: "linear-gradient(135deg,#071a34 0%,#0c2d57 55%,#0e4f9d 100%)" },
+        loginCard: { width: "min(440px, 100%)", background: "#fff", borderRadius: "24px", padding: "34px", boxShadow: "0 28px 70px rgba(0,0,0,.28)" },
+        logoLogin: { width: "230px", maxWidth: "100%", height: "72px", objectFit: "contain", display: "block", margin: "0 auto 22px" },
+        etiqueta: { display: "block", fontSize: "13px", fontWeight: 800, marginBottom: "7px", color: "#334155" },
+        input: { width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "13px 14px", fontSize: "15px", outline: "none" },
+        botonAzul: { border: 0, borderRadius: "10px", padding: "10px 14px", fontWeight: 800, cursor: "pointer", background: "#1473e6", color: "#fff" },
+        sidebar: { width: "250px", background: "#081d38", color: "#fff", minHeight: "100vh", padding: "24px 18px", boxSizing: "border-box" },
+        contenido: { flex: 1, padding: "30px", minWidth: 0 },
+        tarjeta: { background: "#fff", borderRadius: "16px", boxShadow: "0 8px 24px rgba(15,23,42,.07)", border: "1px solid #e7edf5" },
+        stat: { background: "#fff", borderRadius: "16px", padding: "20px", boxShadow: "0 8px 24px rgba(15,23,42,.06)", border: "1px solid #e7edf5" },
+        navItem: { display: "flex", gap: "10px", alignItems: "center", width: "100%", padding: "12px 13px", border: 0, borderRadius: "10px", background: "rgba(255,255,255,.08)", color: "#fff", fontWeight: 700, textAlign: "left", marginBottom: "8px", cursor: "pointer" },
+        badge: { display: "inline-flex", padding: "5px 10px", borderRadius: "999px", background: "#fff7d6", color: "#8a6500", fontSize: "12px", fontWeight: 800 },
+        precioInput: { width: "120px", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "9px", padding: "9px 10px", fontSize: "14px", outline: "none" },
+        resumenTotal: { display: "grid", gridTemplateColumns: "1fr auto", gap: "8px 22px", marginLeft: "auto", width: "min(340px, 100%)", padding: "18px", background: "#f8fafc", border: "1px solid #e7edf5", borderRadius: "14px" },
+    };
+
+    if (!adminToken) {
         return (
-            <div style={estilos.pagina}>
-                <div style={{ display: "flex", minHeight: "100vh" }}>
-                    <aside style={estilos.sidebar}>
-                        <ImagenRecurso
-                            imagenes={[img("logo-ingedata-nuevo.jpeg")]}
-                            alt="INGEDATA"
-                            style={{ width: "190px", height: "62px", objectFit: "contain", background: "#fff", borderRadius: "12px", padding: "6px", boxSizing: "border-box", marginBottom: "26px" }}
-                        />
+            <div style={estilos.loginPagina}>
+                <div style={estilos.loginCard}>
+                    <ImagenRecurso
+                        imagenes={[img("logo-ingedata-nuevo.jpeg")]}
+                        alt="INGEDATA"
+                        style={estilos.logoLogin}
+                    />
 
-                        <div style={{ fontSize: "11px", letterSpacing: "1.5px", color: "#7fa7d3", margin: "0 8px 12px", fontWeight: 800 }}>ADMINISTRACIÓN</div>
-                        <button
-                            type="button"
-                            style={estilos.navItem}
-                            onClick={() => {
-                                setAdminSeccion("dashboard");
-                                cargarCotizacionesAdmin();
-                                cargarPedidosAdmin();
-                            }}
-                        >
-                            📊 Dashboard
-                        </button>
+                    <div style={{ textAlign: "center", marginBottom: "26px" }}>
+                        <div style={{ color: "#1473e6", fontWeight: 900, letterSpacing: "1.5px", fontSize: "12px", marginBottom: "8px" }}>
+                            PANEL ADMINISTRATIVO
+                        </div>
+                        <h1 style={{ margin: "0 0 8px", fontSize: "28px" }}>Iniciar sesión</h1>
+                        <p style={{ margin: 0, color: "#64748b", lineHeight: 1.55 }}>
+                            Acceso exclusivo para la administración de INGEDATA.
+                        </p>
+                    </div>
 
-                        <button
-                            type="button"
-                            style={estilos.navItem}
-                            onClick={() => {
-                                setAdminSeccion("cotizaciones");
-                                setAdminPedidoSeleccionado(null);
-                                cargarCotizacionesAdmin();
-                            }}
-                        >
-                            📋 Cotizaciones
-                        </button>
-
-                        <button
-                            type="button"
-                            style={estilos.navItem}
-                            onClick={() => {
-                                setAdminSeccion("pedidos");
-                                setAdminPedidoSeleccionado(null);
-                                setAdminCotizacionSeleccionada(null);
-                                setAdminPedidoMensaje("");
-                                cargarPedidosAdmin();
-                            }}
-                        >
-                            📦 Pedidos
-                        </button>
-
-                        <button
-                            type="button"
-                            style={{
-                                ...estilos.navItem,
-                                marginTop: "28px",
-                                background: "rgba(255,255,255,.04)"
-                            }}
-                            onClick={cerrarSesionAdmin}
-                        >
-                            🚪 Cerrar sesión
-                        </button>
-                    </aside>
-
-                    <main style={estilos.contenido}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "center", marginBottom: "26px", flexWrap: "wrap" }}>
-                            <div>
-                                <div style={{ color: "#1473e6", fontSize: "12px", letterSpacing: "1.4px", fontWeight: 900 }}>PANEL ADMINISTRATIVO</div>
-                                <h1 style={{ margin: "6px 0 4px", fontSize: "30px" }}>
-                                    {adminSeccion === "pedidos" ? "Gestión de pedidos" : adminSeccion === "dashboard" ? "Panel de control" : "Solicitudes de cotización"}
-                                </h1>
-
-                                <p style={{ margin: 0, color: "#64748b" }}>
-                                    {adminSeccion === "pedidos" ? "Revisa y administra los pedidos generados desde cotizaciones aprobadas." : adminSeccion === "dashboard" ? "Resumen general de cotizaciones y pedidos de INGEDATA." : "Revisa las solicitudes registradas desde la web."}
-                                </p>
-                            </div>
-                            <div style={{ ...estilos.tarjeta, padding: "12px 16px", fontSize: "13px" }}>
-                                <div style={{ fontWeight: 800 }}>{adminUsuario?.nombre || "Administrador INGEDATA"}</div>
-                                <div style={{ color: "#64748b" }}>{adminUsuario?.correo || "Sesión activa"}</div>
-                            </div>
+                    <form onSubmit={iniciarSesionAdmin}>
+                        <div style={{ marginBottom: "16px" }}>
+                            <label style={estilos.etiqueta}>Correo electrónico</label>
+                            <input
+                                style={estilos.input}
+                                type="email"
+                                placeholder="admin@ingedata.com"
+                                value={adminCorreo}
+                                onChange={(e) => setAdminCorreo(e.target.value)}
+                                autoComplete="username"
+                                required
+                            />
                         </div>
 
-                        {adminSeccion === "dashboard" && (
-                            <>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-                                    {[
-                                        ["Solicitudes", adminCotizaciones.length], ["Pendientes", pendientes], ["Cotizadas", cotizadas],
-                                        ["Aprobadas", aprobadas], ["Rechazadas", rechazadas], ["Pedidos", adminPedidos.length],
-                                        ["En proceso", pedidosProceso], ["Completados", pedidosCompletados]
-                                    ].map(([titulo, valor]) => <div key={titulo} style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>{titulo}</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{valor}</div></div>)}
-                                </div>
-                                <section style={{ ...estilos.tarjeta, padding: "22px" }}>
-                                    <h2 style={{ margin: "0 0 16px" }}>Resumen operativo</h2>
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
-                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Cotizaciones</b><p style={{ color: "#64748b", marginBottom: 0 }}>{personas} personas · {empresas} empresas</p></div>
-                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos activos</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosPendientes} pendientes · {pedidosProceso} en proceso</p></div>
-                                        <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos cerrados</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosCompletados} completados · {pedidosCancelados} cancelados</p></div>
-                                    </div>
-                                </section>
-                            </>
+                        <div style={{ marginBottom: "18px" }}>
+                            <label style={estilos.etiqueta}>Contraseña</label>
+                            <input
+                                style={estilos.input}
+                                type="password"
+                                placeholder="Ingresa tu contraseña"
+                                value={adminPassword}
+                                onChange={(e) => setAdminPassword(e.target.value)}
+                                autoComplete="current-password"
+                                required
+                            />
+                        </div>
+
+                        {adminError && (
+                            <div style={{ padding: "11px 13px", marginBottom: "15px", borderRadius: "10px", background: "#fff1f2", color: "#be123c", fontSize: "13px", fontWeight: 700 }}>
+                                {adminError}
+                            </div>
                         )}
 
-                        {adminSeccion === "cotizaciones" && (
-                            <>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total solicitudes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminCotizaciones.length}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pendientes}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Personas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{personas}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Empresas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{empresas}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cotizadas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{cotizadas}</div></div>
-                                </div>
-                                {adminCotizacionesError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminCotizacionesError}</div>}
-                                <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
-                                    <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
-                                        <div><h2 style={{ margin: 0, fontSize: "19px" }}>Cotizaciones</h2><small style={{ color: "#64748b" }}>Personas y empresas</small></div>
-                                        <button type="button" style={estilos.botonAzul} onClick={() => cargarCotizacionesAdmin()} disabled={adminCotizacionesCargando}>{adminCotizacionesCargando ? "Actualizando..." : "↻ Actualizar"}</button>
-                                    </div>
-                                    {adminCotizacionesCargando && adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Cargando cotizaciones...</div> : adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>No hay solicitudes registradas.</div> : (
-                                        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
-                                            <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Tipo", "Documento", "Productos", "Estado", "Fecha", "Acción"].map((t) => <th key={t} style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b", borderBottom: "1px solid #e7edf5" }}>{t}</th>)}</tr></thead>
-                                            <tbody>{adminCotizaciones.map((c) => <tr key={c.id}>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", fontWeight: 800, whiteSpace: "nowrap" }}>{c.codigo}</td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><div style={{ fontWeight: 800 }}>{c.cliente?.nombre || "Sin nombre"}</div><small style={{ color: "#64748b" }}>{c.cliente?.correo || "Sin correo"}</small></td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.tipo_cliente || "-"}</td><td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.documento || "-"}</td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", textAlign: "center" }}>{c.cantidad_productos ?? 0}</td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><span style={estilos.badge}>{c.estado || "PENDIENTE"}</span></td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{c.fecha_solicitud ? new Date(c.fecha_solicitud).toLocaleString("es-PE") : "-"}</td>
-                                                <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetalleCotizacionAdmin(c.id)}>Ver</button></td>
-                                            </tr>)}</tbody>
-                                        </table></div>
-                                    )}
-                                </section>
-                            </>
-                        )}
-
-                        {adminSeccion === "pedidos" && (
-                            <>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "16px", marginBottom: "24px" }}>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total pedidos</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminPedidos.length}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosPendientes}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>En proceso</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosProceso}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Completados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCompletados}</div></div>
-                                    <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cancelados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCancelados}</div></div>
-                                </div>
-                                {adminPedidosError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminPedidosError}</div>}
-                                <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
-                                    <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ margin: 0 }}>Pedidos</h2><small style={{ color: "#64748b" }}>Pedidos generados desde cotizaciones aprobadas</small></div><button type="button" style={estilos.botonAzul} onClick={() => cargarPedidosAdmin()}>{adminPedidosCargando ? "Actualizando..." : "↻ Actualizar"}</button></div>
-                                    {adminPedidosCargando && adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center" }}>Cargando pedidos...</div> : adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>No hay pedidos registrados.</div> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
-                                        <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Documento", "Productos", "Total", "Estado", "Fecha", "Acción"].map(t => <th key={t} style={{ padding: "13px 16px", fontSize: 12, color: "#64748b" }}>{t}</th>)}</tr></thead>
-                                        <tbody>{adminPedidos.map(p => <tr key={p.id}><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>{p.codigo}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.nombre || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.documento || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cantidad_productos ?? 0}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>S/ {Number(p.total || 0).toFixed(2)}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><span style={estilos.badge}>{p.estado}</span></td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{p.fecha_pedido ? new Date(p.fecha_pedido).toLocaleString("es-PE") : "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetallePedidoAdmin(p.id)}>Ver</button></td></tr>)}</tbody>
-                                    </table></div>}
-                                </section>
-                            </>
-                        )}
-                    </main>
+                        <button
+                            type="submit"
+                            disabled={adminCargando}
+                            style={{ ...estilos.botonAzul, width: "100%", padding: "14px 16px", opacity: adminCargando ? 0.7 : 1 }}
+                        >
+                            {adminCargando ? "Ingresando..." : "Iniciar sesión"}
+                        </button>
+                    </form>
                 </div>
-
-                {adminPedidoSeleccionado && (
-                    <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: 20 }} onClick={() => setAdminPedidoSeleccionado(null)}>
-                        <div style={{ width: "min(900px,100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: 20, boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={e => e.stopPropagation()}>
-                            <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e7edf5" }}><div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DEL PEDIDO</small><h2 style={{ margin: "4px 0 0" }}>{adminPedidoSeleccionado.codigo}</h2></div><button onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", fontSize: 20, cursor: "pointer" }}>×</button></div>
-                            <div style={{ padding: 22 }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 20 }}><div style={estilos.stat}><small>Cliente</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.nombre || "-"}</div></div><div style={estilos.stat}><small>Documento</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.documento || "-"}</div></div><div style={estilos.stat}><small>Estado</small><div style={{ marginTop: 5 }}><span style={estilos.badge}>{adminPedidoSeleccionado.estado}</span></div></div></div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10, marginBottom: 20 }}><div><b>Teléfono:</b> {adminPedidoSeleccionado.cliente?.telefono || "-"}</div><div><b>Correo:</b> {adminPedidoSeleccionado.cliente?.correo || "-"}</div><div><b>Dirección:</b> {adminPedidoSeleccionado.cliente?.direccion || "-"}</div><div><b>Fecha:</b> {adminPedidoSeleccionado.fecha_pedido ? new Date(adminPedidoSeleccionado.fecha_pedido).toLocaleString("es-PE") : "-"}</div></div>
-                                <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 650 }}><thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Producto", "Marca", "Cantidad", "P. unitario", "Subtotal"].map(t => <th key={t} style={{ padding: 11 }}>{t}</th>)}</tr></thead><tbody>{(adminPedidoSeleccionado.productos || []).map((p, i) => <tr key={p.id || i}><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 700 }}>{p.nombre}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.marca || "-"}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.cantidad}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>S/ {Number(p.precio_unitario || 0).toFixed(2)}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 800 }}>S/ {Number(p.subtotal || 0).toFixed(2)}</td></tr>)}</tbody></table></div>
-                                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}><div style={estilos.resumenTotal}><span>Subtotal</span><b>S/ {Number(adminPedidoSeleccionado.subtotal || 0).toFixed(2)}</b><span>IGV 18 %</span><b>S/ {Number(adminPedidoSeleccionado.igv || 0).toFixed(2)}</b><strong>TOTAL</strong><strong style={{ color: "#1473e6", fontSize: 20 }}>S/ {Number(adminPedidoSeleccionado.total || 0).toFixed(2)}</strong></div></div>
-                                {adminPedidoMensaje && <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2", color: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c", fontWeight: 800 }}>{adminPedidoMensaje}</div>}
-                                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18, flexWrap: "wrap" }}><button type="button" onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "12px 16px", background: "#fff", fontWeight: 800, cursor: "pointer" }}>Cerrar</button>{!["COMPLETADO", "CANCELADO"].includes(String(adminPedidoSeleccionado.estado || "").toUpperCase()) && <><button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("CANCELADO")} style={{ border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", background: "#fff1f2", color: "#be123c", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "PENDIENTE" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("EN_PROCESO")} style={estilos.botonAzul}>Pasar a EN PROCESO</button>}{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "EN_PROCESO" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("COMPLETADO")} style={estilos.botonAzul}>Marcar COMPLETADO</button>}</>}</div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {adminCotizacionSeleccionada && (
-                    <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: "20px" }} onClick={() => setAdminCotizacionSeleccionada(null)}>
-                        <div style={{ width: "min(850px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: "20px", boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e7edf5" }}>
-                                <div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DE SOLICITUD</small><h2 style={{ margin: "4px 0 0" }}>{adminCotizacionSeleccionada.codigo}</h2></div>
-                                <button type="button" onClick={() => setAdminCotizacionSeleccionada(null)} style={{ border: 0, background: "#eef2f7", width: "38px", height: "38px", borderRadius: "50%", cursor: "pointer", fontSize: "20px" }}>×</button>
-                            </div>
-                            <div style={{ padding: "22px" }}>
-                                {adminDetalleCargando ? <p>Cargando detalle...</p> : (
-                                    <>
-                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "12px", marginBottom: "22px" }}>
-                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Cliente</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.razon_social : `${adminCotizacionSeleccionada.cliente?.nombres || ""} ${adminCotizacionSeleccionada.cliente?.apellidos || ""}`.trim()}</div></div>
-                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Documento</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.ruc : adminCotizacionSeleccionada.cliente?.dni}</div></div>
-                                            <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Estado</small><div style={{ marginTop: "5px" }}><span
-                                                style={{
-                                                    ...estilos.badge,
-                                                    background:
-                                                        String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
-                                                            ? "#dcfce7"
-                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
-                                                                ? "#ffe4e6"
-                                                                : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
-                                                                    ? "#dbeafe"
-                                                                    : "#fff7d6",
-                                                    color:
-                                                        String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
-                                                            ? "#166534"
-                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
-                                                                ? "#be123c"
-                                                                : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
-                                                                    ? "#1d4ed8"
-                                                                    : "#8a6500",
-                                                }}
-                                            >
-                                                {adminCotizacionSeleccionada.estado}
-                                            </span></div></div>
-                                        </div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "10px", marginBottom: "22px", fontSize: "14px" }}>
-                                            <div><b>Teléfono:</b> {adminCotizacionSeleccionada.cliente?.telefono || "-"}</div>
-                                            <div><b>Correo:</b> {adminCotizacionSeleccionada.cliente?.correo || "-"}</div>
-                                            <div><b>Dirección:</b> {adminCotizacionSeleccionada.cliente?.direccion || "-"}</div>
-                                            <div><b>Fecha:</b> {adminCotizacionSeleccionada.fecha_solicitud ? new Date(adminCotizacionSeleccionada.fecha_solicitud).toLocaleString("es-PE") : "-"}</div>
-                                        </div>
-                                        <div style={{ padding: "14px 16px", background: "#f8fafc", borderRadius: "12px", marginBottom: "20px" }}><b>Observaciones</b><p style={{ margin: "6px 0 0", color: "#475569" }}>{adminCotizacionSeleccionada.observaciones || "Sin observaciones."}</p></div>
-                                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "10px" }}>
-                                            <h3 style={{ margin: 0 }}>Productos solicitados</h3>
-                                            <small style={{ color: "#64748b" }}>
-                                                {["APROBADA", "RECHAZADA"].includes(
-                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
-                                                )
-                                                    ? "Cotización finalizada. Los precios ya no pueden modificarse."
-                                                    : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
-                                                        ? "Puedes modificar los precios y volver a guardar la cotización cuando sea necesario."
-                                                        : "Ingresa el precio unitario sin IGV. El sistema calculará el IGV 18 %."}
-                                            </small>
-                                        </div>
-
-                                        <div style={{ overflowX: "auto" }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
-                                                <thead>
-                                                    <tr style={{ background: "#f8fafc", textAlign: "left" }}>
-                                                        <th style={{ padding: "11px" }}>Producto</th>
-                                                        <th style={{ padding: "11px" }}>Marca</th>
-                                                        <th style={{ padding: "11px" }}>Cantidad</th>
-                                                        <th style={{ padding: "11px" }}>Precio unitario</th>
-                                                        <th style={{ padding: "11px" }}>Subtotal</th>
-                                                    </tr>
-                                                </thead>
-
-                                                <tbody>
-                                                    {(adminCotizacionSeleccionada.productos || []).map((p) => {
-                                                        const precio = Number(adminPrecios[p.id]);
-                                                        const precioValido = Number.isFinite(precio) && precio > 0;
-                                                        const subtotalVisual = precioValido
-                                                            ? Number((precio * Number(p.cantidad || 0)).toFixed(2))
-                                                            : 0;
-
-                                                        return (
-                                                            <tr key={p.id}>
-                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 700 }}>
-                                                                    {p.nombre}
-                                                                </td>
-                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
-                                                                    {p.marca || "-"}
-                                                                </td>
-                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
-                                                                    {p.cantidad}
-                                                                </td>
-                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
-                                                                    <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                                                                        <span style={{ fontWeight: 800 }}>S/</span>
-                                                                        <input
-                                                                            type="text"
-                                                                            inputMode="decimal"
-                                                                            style={{
-                                                                                ...estilos.precioInput,
-                                                                                background: ["APROBADA", "RECHAZADA"].includes(
-                                                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
-                                                                                )
-                                                                                    ? "#f1f5f9"
-                                                                                    : "#ffffff",
-                                                                                cursor: ["APROBADA", "RECHAZADA"].includes(
-                                                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase()
-                                                                                )
-                                                                                    ? "not-allowed"
-                                                                                    : "text",
-                                                                            }}
-                                                                            placeholder="0.00"
-                                                                            value={adminPrecios[p.id] ?? ""}
-                                                                            onChange={(e) => cambiarPrecioAdmin(p.id, e.target.value)}
-                                                                            disabled={["APROBADA", "RECHAZADA"].includes(
-                                                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
-                                                                            )}
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 800 }}>
-                                                                    {precioValido ? `S/ ${subtotalVisual.toFixed(2)}` : "Pendiente"}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-
-                                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "22px" }}>
-                                            <div style={estilos.resumenTotal}>
-                                                <span style={{ color: "#64748b" }}>Subtotal</span>
-                                                <b>S/ {totalesAdmin.subtotal.toFixed(2)}</b>
-                                                <span style={{ color: "#64748b" }}>IGV 18 %</span>
-                                                <b>S/ {totalesAdmin.igv.toFixed(2)}</b>
-                                                <span style={{ color: "#0f172a", fontSize: "17px", fontWeight: 900 }}>TOTAL</span>
-                                                <strong style={{ color: "#1473e6", fontSize: "20px" }}>
-                                                    S/ {totalesAdmin.total.toFixed(2)}
-                                                </strong>
-                                            </div>
-                                        </div>
-
-                                        {adminCotizacionMensaje && (
-                                            <div
-                                                style={{
-                                                    marginTop: "16px",
-                                                    padding: "12px 14px",
-                                                    borderRadius: "10px",
-                                                    background: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2",
-                                                    color: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c",
-                                                    fontWeight: 800,
-                                                    fontSize: "13px",
-                                                }}
-                                            >
-                                                {adminCotizacionMensaje}
-                                            </div>
-                                        )}
-
-                                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setAdminCotizacionSeleccionada(null);
-                                                    setAdminCotizacionMensaje("");
-                                                }}
-                                                style={{
-                                                    border: "1px solid #cbd5e1",
-                                                    borderRadius: "10px",
-                                                    padding: "12px 16px",
-                                                    background: "#fff",
-                                                    color: "#334155",
-                                                    fontWeight: 800,
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                Cerrar
-                                            </button>
-                                            {String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA" && (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => cambiarEstadoCotizacionAdmin("RECHAZADA")}
-                                                        disabled={adminGuardandoCotizacion}
-                                                        style={{
-                                                            border: "1px solid #fecaca",
-                                                            borderRadius: "10px",
-                                                            padding: "12px 16px",
-                                                            background: "#fff1f2",
-                                                            color: "#be123c",
-                                                            fontWeight: 800,
-                                                            cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
-                                                            opacity: adminGuardandoCotizacion ? 0.6 : 1,
-                                                        }}
-                                                    >
-                                                        Rechazar
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => cambiarEstadoCotizacionAdmin("APROBADA")}
-                                                        disabled={adminGuardandoCotizacion}
-                                                        style={{
-                                                            border: "1px solid #bbf7d0",
-                                                            borderRadius: "10px",
-                                                            padding: "12px 16px",
-                                                            background: "#dcfce7",
-                                                            color: "#166534",
-                                                            fontWeight: 800,
-                                                            cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
-                                                            opacity: adminGuardandoCotizacion ? 0.6 : 1,
-                                                        }}
-                                                    >
-                                                        Aprobar
-                                                    </button>
-                                                </>
-                                            )}
-
-                                            {["PENDIENTE", "COTIZADA"].includes(
-                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
-                                            ) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={guardarCotizacionAdmin}
-                                                        disabled={adminGuardandoCotizacion || !totalesAdmin.completo}
-                                                        style={{
-                                                            ...estilos.botonAzul,
-                                                            padding: "12px 18px",
-                                                            opacity:
-                                                                adminGuardandoCotizacion || !totalesAdmin.completo
-                                                                    ? 0.55
-                                                                    : 1,
-                                                            cursor:
-                                                                adminGuardandoCotizacion || !totalesAdmin.completo
-                                                                    ? "not-allowed"
-                                                                    : "pointer",
-                                                        }}
-                                                    >
-                                                        {adminGuardandoCotizacion
-                                                            ? "Guardando..."
-                                                            : String(
-                                                                adminCotizacionSeleccionada.estado || ""
-                                                            ).toUpperCase() === "COTIZADA"
-                                                                ? "Guardar cambios"
-                                                                : "Guardar cotización"}
-                                                    </button>
-                                                )}
-
-                                            {String(
-                                                adminCotizacionSeleccionada.estado || ""
-                                            ).toUpperCase() === "COTIZADA" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={enviarCotizacionCorreoAdmin}
-                                                        disabled={adminEnviandoCotizacion}
-                                                        style={{
-                                                            border: "1px solid #bfdbfe",
-                                                            borderRadius: "10px",
-                                                            padding: "12px 16px",
-                                                            background: "#dbeafe",
-                                                            color: "#1d4ed8",
-                                                            fontWeight: 800,
-                                                            cursor: adminEnviandoCotizacion
-                                                                ? "not-allowed"
-                                                                : "pointer",
-                                                            opacity: adminEnviandoCotizacion
-                                                                ? 0.6
-                                                                : 1,
-                                                        }}
-                                                    >
-                                                        {adminEnviandoCotizacion
-                                                            ? "Enviando..."
-                                                            : "📧 Enviar proforma al cliente"}
-                                                    </button>
-                                                )}
-                                                
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         );
     }
 
     return (
-        <>
-            <div className="topbar">
-                <div className="wrap">
-                    <div>
-                        📞 {DATOS_EMPRESA.telefono1} / {DATOS_EMPRESA.telefono2}
-                        <span className="dot">•</span> ✉️ {DATOS_EMPRESA.correo}
+        <div style={estilos.pagina}>
+            <div style={{ display: "flex", minHeight: "100vh" }}>
+                <aside style={estilos.sidebar}>
+                    <ImagenRecurso
+                        imagenes={[img("logo-ingedata-nuevo.jpeg")]}
+                        alt="INGEDATA"
+                        style={{ width: "190px", height: "62px", objectFit: "contain", background: "#fff", borderRadius: "12px", padding: "6px", boxSizing: "border-box", marginBottom: "26px" }}
+                    />
+
+                    <div style={{ fontSize: "11px", letterSpacing: "1.5px", color: "#7fa7d3", margin: "0 8px 12px", fontWeight: 800 }}>ADMINISTRACIÓN</div>
+                    <button
+                        type="button"
+                        style={estilos.navItem}
+                        onClick={() => {
+                            setAdminSeccion("dashboard");
+                            cargarCotizacionesAdmin();
+                            cargarPedidosAdmin();
+                        }}
+                    >
+                        📊 Dashboard
+                    </button>
+
+                    <button
+                        type="button"
+                        style={estilos.navItem}
+                        onClick={() => {
+                            setAdminSeccion("cotizaciones");
+                            setAdminPedidoSeleccionado(null);
+                            cargarCotizacionesAdmin();
+                        }}
+                    >
+                        📋 Cotizaciones
+                    </button>
+
+                    <button
+                        type="button"
+                        style={estilos.navItem}
+                        onClick={() => {
+                            setAdminSeccion("pedidos");
+                            setAdminPedidoSeleccionado(null);
+                            setAdminCotizacionSeleccionada(null);
+                            setAdminPedidoMensaje("");
+                            cargarPedidosAdmin();
+                        }}
+                    >
+                        📦 Pedidos
+                    </button>
+
+                    <button
+                        type="button"
+                        style={{
+                            ...estilos.navItem,
+                            marginTop: "28px",
+                            background: "rgba(255,255,255,.04)"
+                        }}
+                        onClick={cerrarSesionAdmin}
+                    >
+                        🚪 Cerrar sesión
+                    </button>
+                </aside>
+
+                <main style={estilos.contenido}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "center", marginBottom: "26px", flexWrap: "wrap" }}>
+                        <div>
+                            <div style={{ color: "#1473e6", fontSize: "12px", letterSpacing: "1.4px", fontWeight: 900 }}>PANEL ADMINISTRATIVO</div>
+                            <h1 style={{ margin: "6px 0 4px", fontSize: "30px" }}>
+                                {adminSeccion === "pedidos" ? "Gestión de pedidos" : adminSeccion === "dashboard" ? "Panel de control" : "Solicitudes de cotización"}
+                            </h1>
+
+                            <p style={{ margin: 0, color: "#64748b" }}>
+                                {adminSeccion === "pedidos" ? "Revisa y administra los pedidos generados desde cotizaciones aprobadas." : adminSeccion === "dashboard" ? "Resumen general de cotizaciones y pedidos de INGEDATA." : "Revisa las solicitudes registradas desde la web."}
+                            </p>
+                        </div>
+                        <div style={{ ...estilos.tarjeta, padding: "12px 16px", fontSize: "13px" }}>
+                            <div style={{ fontWeight: 800 }}>{adminUsuario?.nombre || "Administrador INGEDATA"}</div>
+                            <div style={{ color: "#64748b" }}>{adminUsuario?.correo || "Sesión activa"}</div>
+                        </div>
                     </div>
-                    <div>
-                        RUC {DATOS_EMPRESA.ruc} <span className="dot">•</span> Lun – Sáb ·
-                        8:00 – 18:00
+
+                    {adminSeccion === "dashboard" && (
+                        <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                                {[
+                                    ["Solicitudes", adminCotizaciones.length], ["Pendientes", pendientes], ["Cotizadas", cotizadas],
+                                    ["Aprobadas", aprobadas], ["Rechazadas", rechazadas], ["Pedidos", adminPedidos.length],
+                                    ["En proceso", pedidosProceso], ["Completados", pedidosCompletados]
+                                ].map(([titulo, valor]) => <div key={titulo} style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>{titulo}</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{valor}</div></div>)}
+                            </div>
+                            <section style={{ ...estilos.tarjeta, padding: "22px" }}>
+                                <h2 style={{ margin: "0 0 16px" }}>Resumen operativo</h2>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
+                                    <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Cotizaciones</b><p style={{ color: "#64748b", marginBottom: 0 }}>{personas} personas · {empresas} empresas</p></div>
+                                    <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos activos</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosPendientes} pendientes · {pedidosProceso} en proceso</p></div>
+                                    <div style={{ padding: "18px", background: "#f8fafc", borderRadius: "14px" }}><b>Pedidos cerrados</b><p style={{ color: "#64748b", marginBottom: 0 }}>{pedidosCompletados} completados · {pedidosCancelados} cancelados</p></div>
+                                </div>
+                            </section>
+                        </>
+                    )}
+
+                    {adminSeccion === "cotizaciones" && (
+                        <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total solicitudes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminCotizaciones.length}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pendientes}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Personas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{personas}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Empresas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{empresas}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cotizadas</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{cotizadas}</div></div>
+                            </div>
+                            {adminCotizacionesError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminCotizacionesError}</div>}
+                            <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
+                                <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
+                                    <div><h2 style={{ margin: 0, fontSize: "19px" }}>Cotizaciones</h2><small style={{ color: "#64748b" }}>Personas y empresas</small></div>
+                                    <button type="button" style={estilos.botonAzul} onClick={() => cargarCotizacionesAdmin()} disabled={adminCotizacionesCargando}>{adminCotizacionesCargando ? "Actualizando..." : "↻ Actualizar"}</button>
+                                </div>
+                                {adminCotizacionesCargando && adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Cargando cotizaciones...</div> : adminCotizaciones.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>No hay solicitudes registradas.</div> : (
+                                    <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                        <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Tipo", "Documento", "Productos", "Estado", "Fecha", "Acción"].map((t) => <th key={t} style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b", borderBottom: "1px solid #e7edf5" }}>{t}</th>)}</tr></thead>
+                                        <tbody>{adminCotizaciones.map((c) => <tr key={c.id}>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", fontWeight: 800, whiteSpace: "nowrap" }}>{c.codigo}</td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><div style={{ fontWeight: 800 }}>{c.cliente?.nombre || "Sin nombre"}</div><small style={{ color: "#64748b" }}>{c.cliente?.correo || "Sin correo"}</small></td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.tipo_cliente || "-"}</td><td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}>{c.cliente?.documento || "-"}</td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", textAlign: "center" }}>{c.cantidad_productos ?? 0}</td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><span style={estilos.badge}>{c.estado || "PENDIENTE"}</span></td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{c.fecha_solicitud ? new Date(c.fecha_solicitud).toLocaleString("es-PE") : "-"}</td>
+                                            <td style={{ padding: "14px 16px", borderBottom: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetalleCotizacionAdmin(c.id)}>Ver</button></td>
+                                        </tr>)}</tbody>
+                                    </table></div>
+                                )}
+                            </section>
+                        </>
+                    )}
+
+                    {adminSeccion === "pedidos" && (
+                        <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "16px", marginBottom: "24px" }}>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Total pedidos</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{adminPedidos.length}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Pendientes</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosPendientes}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>En proceso</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosProceso}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Completados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCompletados}</div></div>
+                                <div style={estilos.stat}><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Cancelados</div><div style={{ fontSize: "30px", fontWeight: 900 }}>{pedidosCancelados}</div></div>
+                            </div>
+                            {adminPedidosError && <div style={{ padding: "13px 16px", borderRadius: "12px", background: "#fff1f2", color: "#be123c", marginBottom: "18px", fontWeight: 700 }}>{adminPedidosError}</div>}
+                            <section style={{ ...estilos.tarjeta, overflow: "hidden" }}>
+                                <div style={{ padding: "18px 20px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ margin: 0 }}>Pedidos</h2><small style={{ color: "#64748b" }}>Pedidos generados desde cotizaciones aprobadas</small></div><button type="button" style={estilos.botonAzul} onClick={() => cargarPedidosAdmin()}>{adminPedidosCargando ? "Actualizando..." : "↻ Actualizar"}</button></div>
+                                {adminPedidosCargando && adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center" }}>Cargando pedidos...</div> : adminPedidos.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>No hay pedidos registrados.</div> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                    <thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Código", "Cliente", "Documento", "Productos", "Total", "Estado", "Fecha", "Acción"].map(t => <th key={t} style={{ padding: "13px 16px", fontSize: 12, color: "#64748b" }}>{t}</th>)}</tr></thead>
+                                    <tbody>{adminPedidos.map(p => <tr key={p.id}><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>{p.codigo}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.nombre || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cliente?.documento || "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}>{p.cantidad_productos ?? 0}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", fontWeight: 800 }}>S/ {Number(p.total || 0).toFixed(2)}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><span style={estilos.badge}>{p.estado}</span></td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7", whiteSpace: "nowrap" }}>{p.fecha_pedido ? new Date(p.fecha_pedido).toLocaleString("es-PE") : "-"}</td><td style={{ padding: "14px 16px", borderTop: "1px solid #edf2f7" }}><button type="button" style={estilos.botonAzul} onClick={() => abrirDetallePedidoAdmin(p.id)}>Ver</button></td></tr>)}</tbody>
+                                </table></div>}
+                            </section>
+                        </>
+                    )}
+                </main>
+            </div>
+
+            {adminPedidoSeleccionado && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: 20 }} onClick={() => setAdminPedidoSeleccionado(null)}>
+                    <div style={{ width: "min(900px,100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: 20, boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={e => e.stopPropagation()}>
+                        <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e7edf5" }}><div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DEL PEDIDO</small><h2 style={{ margin: "4px 0 0" }}>{adminPedidoSeleccionado.codigo}</h2></div><button onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", fontSize: 20, cursor: "pointer" }}>×</button></div>
+                        <div style={{ padding: 22 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 20 }}><div style={estilos.stat}><small>Cliente</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.nombre || "-"}</div></div><div style={estilos.stat}><small>Documento</small><div style={{ fontWeight: 900, marginTop: 5 }}>{adminPedidoSeleccionado.cliente?.documento || "-"}</div></div><div style={estilos.stat}><small>Estado</small><div style={{ marginTop: 5 }}><span style={estilos.badge}>{adminPedidoSeleccionado.estado}</span></div></div></div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10, marginBottom: 20 }}><div><b>Teléfono:</b> {adminPedidoSeleccionado.cliente?.telefono || "-"}</div><div><b>Correo:</b> {adminPedidoSeleccionado.cliente?.correo || "-"}</div><div><b>Dirección:</b> {adminPedidoSeleccionado.cliente?.direccion || "-"}</div><div><b>Fecha:</b> {adminPedidoSeleccionado.fecha_pedido ? new Date(adminPedidoSeleccionado.fecha_pedido).toLocaleString("es-PE") : "-"}</div></div>
+                            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 650 }}><thead><tr style={{ background: "#f8fafc", textAlign: "left" }}>{["Producto", "Marca", "Cantidad", "P. unitario", "Subtotal"].map(t => <th key={t} style={{ padding: 11 }}>{t}</th>)}</tr></thead><tbody>{(adminPedidoSeleccionado.productos || []).map((p, i) => <tr key={p.id || i}><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 700 }}>{p.nombre}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.marca || "-"}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>{p.cantidad}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5" }}>S/ {Number(p.precio_unitario || 0).toFixed(2)}</td><td style={{ padding: 11, borderTop: "1px solid #e7edf5", fontWeight: 800 }}>S/ {Number(p.subtotal || 0).toFixed(2)}</td></tr>)}</tbody></table></div>
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}><div style={estilos.resumenTotal}><span>Subtotal</span><b>S/ {Number(adminPedidoSeleccionado.subtotal || 0).toFixed(2)}</b><span>IGV 18 %</span><b>S/ {Number(adminPedidoSeleccionado.igv || 0).toFixed(2)}</b><strong>TOTAL</strong><strong style={{ color: "#1473e6", fontSize: 20 }}>S/ {Number(adminPedidoSeleccionado.total || 0).toFixed(2)}</strong></div></div>
+                            {adminPedidoMensaje && <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2", color: adminPedidoMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c", fontWeight: 800 }}>{adminPedidoMensaje}</div>}
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18, flexWrap: "wrap" }}><button type="button" onClick={() => setAdminPedidoSeleccionado(null)} style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: "12px 16px", background: "#fff", fontWeight: 800, cursor: "pointer" }}>Cerrar</button>{!["COMPLETADO", "CANCELADO"].includes(String(adminPedidoSeleccionado.estado || "").toUpperCase()) && <><button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("CANCELADO")} style={{ border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", background: "#fff1f2", color: "#be123c", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "PENDIENTE" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("EN_PROCESO")} style={estilos.botonAzul}>Pasar a EN PROCESO</button>}{String(adminPedidoSeleccionado.estado || "").toUpperCase() === "EN_PROCESO" && <button type="button" disabled={adminGuardandoPedido} onClick={() => cambiarEstadoPedidoAdmin("COMPLETADO")} style={estilos.botonAzul}>Marcar COMPLETADO</button>}</>}</div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {adminCotizacionSeleccionada && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(4,16,34,.66)", display: "grid", placeItems: "center", padding: "20px" }} onClick={() => setAdminCotizacionSeleccionada(null)}>
+                    <div style={{ width: "min(850px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: "20px", boxShadow: "0 28px 80px rgba(0,0,0,.35)" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ padding: "20px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e7edf5" }}>
+                            <div><small style={{ color: "#64748b", fontWeight: 800 }}>DETALLE DE SOLICITUD</small><h2 style={{ margin: "4px 0 0" }}>{adminCotizacionSeleccionada.codigo}</h2></div>
+                            <button type="button" onClick={() => setAdminCotizacionSeleccionada(null)} style={{ border: 0, background: "#eef2f7", width: "38px", height: "38px", borderRadius: "50%", cursor: "pointer", fontSize: "20px" }}>×</button>
+                        </div>
+                        <div style={{ padding: "22px" }}>
+                            {adminDetalleCargando ? <p>Cargando detalle...</p> : (
+                                <>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "12px", marginBottom: "22px" }}>
+                                        <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Cliente</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.razon_social : `${adminCotizacionSeleccionada.cliente?.nombres || ""} ${adminCotizacionSeleccionada.cliente?.apellidos || ""}`.trim()}</div></div>
+                                        <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Documento</small><div style={{ fontWeight: 900, marginTop: "4px" }}>{adminCotizacionSeleccionada.cliente?.tipo_cliente === "EMPRESA" ? adminCotizacionSeleccionada.cliente?.ruc : adminCotizacionSeleccionada.cliente?.dni}</div></div>
+                                        <div style={{ ...estilos.stat, boxShadow: "none" }}><small style={{ color: "#64748b" }}>Estado</small><div style={{ marginTop: "5px" }}><span
+                                            style={{
+                                                ...estilos.badge,
+                                                background:
+                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
+                                                        ? "#dcfce7"
+                                                        : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
+                                                            ? "#ffe4e6"
+                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                                ? "#dbeafe"
+                                                                : "#fff7d6",
+                                                color:
+                                                    String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "APROBADA"
+                                                        ? "#166534"
+                                                        : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "RECHAZADA"
+                                                            ? "#be123c"
+                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                                ? "#1d4ed8"
+                                                                : "#8a6500",
+                                            }}
+                                        >
+                                            {adminCotizacionSeleccionada.estado}
+                                        </span></div></div>
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "10px", marginBottom: "22px", fontSize: "14px" }}>
+                                        <div><b>Teléfono:</b> {adminCotizacionSeleccionada.cliente?.telefono || "-"}</div>
+                                        <div><b>Correo:</b> {adminCotizacionSeleccionada.cliente?.correo || "-"}</div>
+                                        <div><b>Dirección:</b> {adminCotizacionSeleccionada.cliente?.direccion || "-"}</div>
+                                        <div><b>Fecha:</b> {adminCotizacionSeleccionada.fecha_solicitud ? new Date(adminCotizacionSeleccionada.fecha_solicitud).toLocaleString("es-PE") : "-"}</div>
+                                    </div>
+                                    <div style={{ padding: "14px 16px", background: "#f8fafc", borderRadius: "12px", marginBottom: "20px" }}><b>Observaciones</b><p style={{ margin: "6px 0 0", color: "#475569" }}>{adminCotizacionSeleccionada.observaciones || "Sin observaciones."}</p></div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "10px" }}>
+                                        <h3 style={{ margin: 0 }}>Productos solicitados</h3>
+                                        <small style={{ color: "#64748b" }}>
+                                            {["APROBADA", "RECHAZADA"].includes(
+                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                            )
+                                                ? "Cotización finalizada. Los precios ya no pueden modificarse."
+                                                : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                    ? "Puedes modificar los precios y volver a guardar la cotización cuando sea necesario."
+                                                    : "Ingresa el precio unitario sin IGV. El sistema calculará el IGV 18 %."}
+                                        </small>
+                                    </div>
+
+                                    <div style={{ overflowX: "auto" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
+                                            <thead>
+                                                <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                                                    <th style={{ padding: "11px" }}>Producto</th>
+                                                    <th style={{ padding: "11px" }}>Marca</th>
+                                                    <th style={{ padding: "11px" }}>Cantidad</th>
+                                                    <th style={{ padding: "11px" }}>Precio unitario</th>
+                                                    <th style={{ padding: "11px" }}>Subtotal</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody>
+                                                {(adminCotizacionSeleccionada.productos || []).map((p) => {
+                                                    const precio = Number(adminPrecios[p.id]);
+                                                    const precioValido = Number.isFinite(precio) && precio > 0;
+                                                    const subtotalVisual = precioValido
+                                                        ? Number((precio * Number(p.cantidad || 0)).toFixed(2))
+                                                        : 0;
+
+                                                    return (
+                                                        <tr key={p.id}>
+                                                            <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 700 }}>
+                                                                {p.nombre}
+                                                            </td>
+                                                            <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                {p.marca || "-"}
+                                                            </td>
+                                                            <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                {p.cantidad}
+                                                            </td>
+                                                            <td style={{ padding: "11px", borderTop: "1px solid #e7edf5" }}>
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                                                                    <span style={{ fontWeight: 800 }}>S/</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        style={{
+                                                                            ...estilos.precioInput,
+                                                                            background: ["APROBADA", "RECHAZADA"].includes(
+                                                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                            )
+                                                                                ? "#f1f5f9"
+                                                                                : "#ffffff",
+                                                                            cursor: ["APROBADA", "RECHAZADA"].includes(
+                                                                                String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                            )
+                                                                                ? "not-allowed"
+                                                                                : "text",
+                                                                        }}
+                                                                        placeholder="0.00"
+                                                                        value={adminPrecios[p.id] ?? ""}
+                                                                        onChange={(e) => cambiarPrecioAdmin(p.id, e.target.value)}
+                                                                        disabled={["APROBADA", "RECHAZADA"].includes(
+                                                                            String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                                                        )}
+                                                                    />
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: "11px", borderTop: "1px solid #e7edf5", fontWeight: 800 }}>
+                                                                {precioValido ? `S/ ${subtotalVisual.toFixed(2)}` : "Pendiente"}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "22px" }}>
+                                        <div style={estilos.resumenTotal}>
+                                            <span style={{ color: "#64748b" }}>Subtotal</span>
+                                            <b>S/ {totalesAdmin.subtotal.toFixed(2)}</b>
+                                            <span style={{ color: "#64748b" }}>IGV 18 %</span>
+                                            <b>S/ {totalesAdmin.igv.toFixed(2)}</b>
+                                            <span style={{ color: "#0f172a", fontSize: "17px", fontWeight: 900 }}>TOTAL</span>
+                                            <strong style={{ color: "#1473e6", fontSize: "20px" }}>
+                                                S/ {totalesAdmin.total.toFixed(2)}
+                                            </strong>
+                                        </div>
+                                    </div>
+
+                                    {adminCotizacionMensaje && (
+                                        <div
+                                            style={{
+                                                marginTop: "16px",
+                                                padding: "12px 14px",
+                                                borderRadius: "10px",
+                                                background: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#ecfdf5" : "#fff1f2",
+                                                color: adminCotizacionMensaje.toLowerCase().includes("correctamente") ? "#166534" : "#be123c",
+                                                fontWeight: 800,
+                                                fontSize: "13px",
+                                            }}
+                                        >
+                                            {adminCotizacionMensaje}
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setAdminCotizacionSeleccionada(null);
+                                                setAdminCotizacionMensaje("");
+                                            }}
+                                            style={{
+                                                border: "1px solid #cbd5e1",
+                                                borderRadius: "10px",
+                                                padding: "12px 16px",
+                                                background: "#fff",
+                                                color: "#334155",
+                                                fontWeight: 800,
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            Cerrar
+                                        </button>
+                                        {String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA" && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => cambiarEstadoCotizacionAdmin("RECHAZADA")}
+                                                    disabled={adminGuardandoCotizacion}
+                                                    style={{
+                                                        border: "1px solid #fecaca",
+                                                        borderRadius: "10px",
+                                                        padding: "12px 16px",
+                                                        background: "#fff1f2",
+                                                        color: "#be123c",
+                                                        fontWeight: 800,
+                                                        cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
+                                                        opacity: adminGuardandoCotizacion ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    Rechazar
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => cambiarEstadoCotizacionAdmin("APROBADA")}
+                                                    disabled={adminGuardandoCotizacion}
+                                                    style={{
+                                                        border: "1px solid #bbf7d0",
+                                                        borderRadius: "10px",
+                                                        padding: "12px 16px",
+                                                        background: "#dcfce7",
+                                                        color: "#166534",
+                                                        fontWeight: 800,
+                                                        cursor: adminGuardandoCotizacion ? "not-allowed" : "pointer",
+                                                        opacity: adminGuardandoCotizacion ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    Aprobar
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {["PENDIENTE", "COTIZADA"].includes(
+                                            String(adminCotizacionSeleccionada.estado || "").toUpperCase()
+                                        ) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={guardarCotizacionAdmin}
+                                                    disabled={adminGuardandoCotizacion || !totalesAdmin.completo}
+                                                    style={{
+                                                        ...estilos.botonAzul,
+                                                        padding: "12px 18px",
+                                                        opacity:
+                                                            adminGuardandoCotizacion || !totalesAdmin.completo
+                                                                ? 0.55
+                                                                : 1,
+                                                        cursor:
+                                                            adminGuardandoCotizacion || !totalesAdmin.completo
+                                                                ? "not-allowed"
+                                                                : "pointer",
+                                                    }}
+                                                >
+                                                    {adminGuardandoCotizacion
+                                                        ? "Guardando..."
+                                                        : String(
+                                                            adminCotizacionSeleccionada.estado || ""
+                                                        ).toUpperCase() === "COTIZADA"
+                                                            ? "Guardar cambios"
+                                                            : "Guardar cotización"}
+                                                </button>
+                                            )}
+
+                                        {String(
+                                            adminCotizacionSeleccionada.estado || ""
+                                        ).toUpperCase() === "COTIZADA" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={descargarProformaPdfAdmin}
+                                                    disabled={adminDescargandoPdf}
+                                                    style={{
+                                                        border: "1px solid #bfdbfe",
+                                                        borderRadius: "10px",
+                                                        padding: "12px 16px",
+                                                        background: "#dbeafe",
+                                                        color: "#1d4ed8",
+                                                        fontWeight: 800,
+                                                        cursor: adminDescargandoPdf
+                                                            ? "not-allowed"
+                                                            : "pointer",
+                                                        opacity: adminDescargandoPdf
+                                                            ? 0.6
+                                                            : 1,
+                                                    }}
+                                                >
+                                                    {adminDescargandoPdf
+                                                        ? "Generando PDF..."
+                                                        : "📄 Descargar proforma PDF"}
+                                                </button>
+                                            )}
+
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+return (
+    <>
+        <div className="topbar">
+            <div className="wrap">
+                <div>
+                    📞 {DATOS_EMPRESA.telefono1} / {DATOS_EMPRESA.telefono2}
+                    <span className="dot">•</span> ✉️ {DATOS_EMPRESA.correo}
+                </div>
+                <div>
+                    RUC {DATOS_EMPRESA.ruc} <span className="dot">•</span> Lun – Sáb ·
+                    8:00 – 18:00
+                </div>
+            </div>
+        </div>
+
+        <header>
+            <div className="wrap head">
+                <a href="#inicio" className="logo logo-completo" aria-label="INGEDATA - Inicio">
+                    <span className="mark mark-completo">
+                        <ImagenRecurso
+                            imagenes={[
+                                img("logo-ingedata-nuevo.jpeg"),
+                            ]}
+                            alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
+                        />
+                    </span>
+                </a>
+
+                <nav className="mainnav">
+                    <a href="#inicio">Inicio</a>
+                    <a href="#nosotros">Nosotros</a>
+                    <a href="#servicios">Servicios</a>
+                    <a href="#tienda">Catálogo</a>
+                    <a href="#pagos">Pagos</a>
+                    <a href="#contacto">Contacto</a>
+                </nav>
+
+                <div className="actions">
+                    <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
+                        📋 Solicitud <span className="badge">{cantidadTotal}</span>
+                    </button>
+
+                    <a href="#tienda" className="btn-quote">
+                        Solicitar proforma →
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section className="hero" id="inicio">
+            <div className="bgimg">
+                <ImagenRecurso
+                    imagenes={[
+                        img("catalogo empresarial.png"),
+                        img("servicios.png"),
+                        img("servicios2.png"),
+                    ]}
+                    alt="INGEDATA infraestructura tecnológica"
+                />
+            </div>
+
+            <div className="wrap">
+                <div>
+                    <span className="eyebrow">Soluciones Integrales</span>
+
+                    <h1>
+                        Soluciones integrales en <em>telecomunicaciones, energía</em> e
+                        infraestructura tecnológica
+                    </h1>
+
+                    <p>
+                        Brindamos servicios de alta calidad en redes de datos, fibra óptica,
+                        sistemas eléctricos, seguridad electrónica, climatización y más.
+                        Soluciones confiables para impulsar tu negocio.
+                    </p>
+
+                    <div className="btns">
+                        <a href="#tienda" className="btn-primary">
+                            Seleccionar productos →
+                        </a>
+
+                        <a href="#servicios" className="btn-ghost">
+                            Ver servicios ▸
+                        </a>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <header>
-                <div className="wrap head">
+        <div className="statstrip">
+            <div className="wrap">
+                <div className="bar">
+                    <div className="s">
+                        <div className="ic">📈</div>
+                        <div>
+                            <div className="num">+50</div>
+                            <small>Proyectos ejecutados</small>
+                        </div>
+                    </div>
+
+                    <div className="s">
+                        <div className="ic">🌎</div>
+                        <div>
+                            <div className="num">Cobertura</div>
+                            <small>Nacional · todo el Perú</small>
+                        </div>
+                    </div>
+
+                    <div className="s">
+                        <div className="ic">🏅</div>
+                        <div>
+                            <div className="num">Equipos</div>
+                            <small>Certificados FLUKE</small>
+                        </div>
+                    </div>
+
+                    <div className="s">
+                        <div className="ic">🏢</div>
+                        <div>
+                            <div className="num">Atención</div>
+                            <small>Corporativa e industrial</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section className="about section" id="nosotros">
+            <div className="wrap">
+                <div className="grid2">
+                    <div className="photo">
+                        <ImagenRecurso
+                            imagenes={[
+                                img("servicios.png"),
+                                img("servicios2.png"),
+                                img("catalogo empresarial.png"),
+                            ]}
+                            alt="Equipo técnico INGEDATA"
+                        />
+                    </div>
+
+                    <div>
+                        <div className="ey">¿Quiénes somos?</div>
+                        <h3>INGEDATA S.A.C.</h3>
+
+                        <p>
+                            Empresa peruana especializada en soluciones integrales de
+                            infraestructura tecnológica, telecomunicaciones y sistemas
+                            eléctricos.
+                        </p>
+
+                        <p>
+                            Atendemos a empresas corporativas, campamentos mineros, plantas
+                            industriales, instituciones y organizaciones de diversos sectores,
+                            brindando soluciones confiables, seguras y eficientes.
+                        </p>
+
+                        <div className="pills">
+                            <div className="pill">
+                                <span className="pic">🎓</span>
+                                <div>
+                                    <b>Experiencia</b>
+                                    <small>Profesionales capacitados</small>
+                                </div>
+                            </div>
+
+                            <div className="pill">
+                                <span className="pic">✅</span>
+                                <div>
+                                    <b>Calidad</b>
+                                    <small>Cumplimiento de estándares</small>
+                                </div>
+                            </div>
+
+                            <div className="pill">
+                                <span className="pic">🛡️</span>
+                                <div>
+                                    <b>Seguridad</b>
+                                    <small>Trabajos con altos estándares</small>
+                                </div>
+                            </div>
+
+                            <div className="pill">
+                                <span className="pic">🤝</span>
+                                <div>
+                                    <b>Compromiso</b>
+                                    <small>Con nuestros clientes</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section className="services section" id="servicios">
+            <div className="wrap">
+                <div className="section-head">
+                    <div className="ey">Servicios técnicos</div>
+                    <h2>
+                        Principales <b>servicios</b>
+                    </h2>
+                    <div className="uline"></div>
+                    <p>
+                        Ejecutamos proyectos de redes, electricidad, fibra óptica, energía,
+                        CCTV y soporte técnico.
+                    </p>
+                </div>
+
+                <div className="sv-grid">
+                    <div className="sv-card">
+                        <div className="ic">🌐</div>
+                        <h4>Cableado estructurado</h4>
+                        <p>
+                            Instalación de puntos de red, patch panel, gabinete, face plate
+                            y certificación.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">💡</div>
+                        <h4>Fibra óptica</h4>
+                        <p>
+                            Instalación, empalme, medición y certificación de enlaces de
+                            fibra óptica.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">⚡</div>
+                        <h4>Sistemas eléctricos</h4>
+                        <p>
+                            Cableado eléctrico, tableros, tomacorrientes, tuberías EMT e
+                            IMC.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">🔋</div>
+                        <h4>UPS y energía</h4>
+                        <p>
+                            Instalación y mantenimiento de UPS, transformadores y grupos
+                            electrógenos.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">🌍</div>
+                        <h4>Pozo a tierra</h4>
+                        <p>
+                            Implementación, mantenimiento y medición de sistemas de puesta a
+                            tierra.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">📹</div>
+                        <h4>CCTV</h4>
+                        <p>
+                            Instalación y configuración de cámaras de vigilancia para
+                            empresas.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">❄️</div>
+                        <h4>Climatización</h4>
+                        <p>
+                            Instalación de equipos de aire acondicionado y soporte operativo.
+                        </p>
+                    </div>
+
+                    <div className="sv-card">
+                        <div className="ic">🪑</div>
+                        <h4>Mobiliario</h4>
+                        <p>
+                            Fabricación e instalación de mobiliario en melamina para
+                            oficinas.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section className="shop section" id="tienda">
+            <div className="wrap">
+                <div className="section-head">
+                    <div className="ey">Catálogo empresarial</div>
+                    <h2>
+                        Productos y <b>Servicios</b>
+                    </h2>
+                    <div className="uline"></div>
+                    <p>
+                        Selecciona los productos o servicios que necesitas. Los precios se
+                        cotizan mediante una proforma personalizada de INGEDATA S.A.C.
+                    </p>
+                </div>
+
+                <div className="shop-top">
+                    <div className="search">
+                        <span className="mag">🔎</span>
+                        <input
+                            value={buscar}
+                            onChange={(e) => setBuscar(e.target.value)}
+                            placeholder="Buscar cable, UPS, jack, fibra, servicio..."
+                        />
+                    </div>
+
+                    <select value={orden} onChange={(e) => setOrden(e.target.value)}>
+                        <option value="default">Ordenar</option>
+                        <option value="az">Nombre A-Z</option>
+                    </select>
+                </div>
+
+                <div className="filters">
+                    {categorias.map((cat) => (
+                        <button
+                            key={cat.value}
+                            className={categoria === cat.value ? "active" : ""}
+                            onClick={() => setCategoria(cat.value)}
+                        >
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="count">
+                    {cargandoProductos
+                        ? "Cargando productos..."
+                        : `${lista.length} producto${lista.length !== 1 ? "s" : ""}`}
+                </div>
+
+                {cargandoProductos ? (
+                    <div className="loading-products">
+                        Cargando productos desde la base de datos...
+                    </div>
+                ) : errorProductos ? (
+                    <div className="loading-products error-products">
+                        {errorProductos}
+                        <br />
+                        No se pudo conectar con el catálogo en línea. Intenta nuevamente en unos segundos.
+                    </div>
+                ) : (
+                    <div className="grid">
+                        {lista.map((p) => {
+                            return (
+                                <article className="card in" key={p.id}>
+                                    <div className="media">
+                                        <ImagenRecurso imagenes={obtenerImagenesProducto(p)} alt={p.nombre} />
+
+                                        <div className="chips">
+                                            {p.tag && (
+                                                <span
+                                                    className={`chip ${p.tag === "Servicio" ||
+                                                        p.tag === "Cotizar"
+                                                        ? "svc"
+                                                        : p.tag === "Kit"
+                                                            ? "green"
+                                                            : "gold"
+                                                        }`}
+                                                >
+                                                    {p.tag}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <button
+                                            className={`fav ${favoritos[p.id] ? "on" : ""}`}
+                                            onClick={() => toggleFavorito(p.id)}
+                                        >
+                                            {favoritos[p.id] ? "♥" : "♡"}
+                                        </button>
+
+                                        <button
+                                            className="quick"
+                                            onClick={() => agregar(p.id)}
+                                        >
+                                            Agregar a solicitud
+                                        </button>
+                                    </div>
+
+                                    <div className="body">
+                                        <span className="brand">{p.brand}</span>
+                                        <h3>{p.nombre}</h3>
+
+                                        <div className="rate">
+                                            <span className="stars">★★★★★</span>{" "}
+                                            {Number(p.rate || 0).toFixed(1)}{" "}
+                                            <span>({p.rev || 0})</span>
+                                        </div>
+
+                                        <div className="priceRow">
+                                            <span className="price quote-price">
+                                                Precio a cotizar
+                                            </span>
+
+                                            <button
+                                                className="add"
+                                                onClick={() => agregar(p.id)}
+                                                title="Agregar a solicitud"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </section>
+
+        <section className="why section">
+            <div className="wrap">
+                <div className="section-head">
+                    <div className="ey">Por qué elegirnos</div>
+                    <h2>Calidad, seguridad y confianza</h2>
+                    <div className="uline"></div>
+                    <p>
+                        Trabajamos con enfoque técnico, cumplimiento, orden y compromiso
+                        con cada cliente.
+                    </p>
+                </div>
+
+                <div className="why-grid">
+                    <div className="why-card">
+                        <div className="ic">🛡️</div>
+                        <b>Seguridad</b>
+                        <small>Procedimientos seguros y responsables.</small>
+                    </div>
+
+                    <div className="why-card">
+                        <div className="ic">✅</div>
+                        <b>Calidad</b>
+                        <small>Soluciones alineadas a estándares técnicos.</small>
+                    </div>
+
+                    <div className="why-card">
+                        <div className="ic">⚙️</div>
+                        <b>Equipamiento</b>
+                        <small>Herramientas para diagnóstico y certificación.</small>
+                    </div>
+
+                    <div className="why-card">
+                        <div className="ic">🤝</div>
+                        <b>Confianza</b>
+                        <small>Atención cercana y profesional.</small>
+                    </div>
+
+                    <div className="why-card">
+                        <div className="ic">🚀</div>
+                        <b>Innovación</b>
+                        <small>Soluciones tecnológicas eficientes.</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section className="payments section" id="pagos">
+            <div className="wrap">
+                <div className="section-head payment-main-head">
+                    <div className="ey">Método de pago</div>
+                    <h2>
+                        Transferencia <b>bancaria segura</b>
+                    </h2>
+                    <div className="uline"></div>
+                    <p>
+                        Realiza tu pago directamente a la cuenta empresarial de INGEDATA S.A.C.
+                        Verifica los datos antes de transferir y conserva tu constancia de pago.
+                    </p>
+                </div>
+
+                <div className="bank-payment-layout">
+                    <div className="bank-card-interactive">
+                        <div className="bank-card-top">
+                            <div>
+                                <span className="bank-label">BANCO</span>
+                                <h3>{DATOS_BANCARIOS.banco}</h3>
+                            </div>
+                            <div className="bank-currency">
+                                <span>S/</span>
+                                <small>{DATOS_BANCARIOS.moneda}</small>
+                            </div>
+                        </div>
+
+                        <div className="bank-owner">
+                            <span>Titular</span>
+                            <strong>{DATOS_BANCARIOS.titular}</strong>
+                            <small>RUC {DATOS_EMPRESA.ruc}</small>
+                        </div>
+
+                        <div className="bank-number-block">
+                            <div className="bank-number-heading">
+                                <span>Número de cuenta</span>
+                                <button
+                                    type="button"
+                                    className="copy-mini"
+                                    onClick={() =>
+                                        copiarTexto(
+                                            DATOS_BANCARIOS.numeroCuenta,
+                                            "Número de cuenta"
+                                        )
+                                    }
+                                >
+                                    📋 Copiar
+                                </button>
+                            </div>
+                            <strong className="bank-number">
+                                {DATOS_BANCARIOS.numeroCuenta}
+                            </strong>
+                        </div>
+
+                        <div className="bank-number-block cci-block">
+                            <div className="bank-number-heading">
+                                <span>CCI</span>
+                                <button
+                                    type="button"
+                                    className="copy-mini"
+                                    onClick={() =>
+                                        copiarTexto(DATOS_BANCARIOS.cci, "CCI")
+                                    }
+                                >
+                                    📋 Copiar
+                                </button>
+                            </div>
+                            <strong className="bank-number bank-number-small">
+                                {DATOS_BANCARIOS.cci}
+                            </strong>
+                        </div>
+
+                        <div className="bank-meta">
+                            <div>
+                                <span>Tipo de cuenta</span>
+                                <b>{DATOS_BANCARIOS.tipoCuenta}</b>
+                            </div>
+                            <div>
+                                <span>Moneda</span>
+                                <b>{DATOS_BANCARIOS.moneda}</b>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="payment-actions-panel">
+                        <div className="payment-status">
+                            <span className="status-dot"></span>
+                            <div>
+                                <b>Cuenta empresarial habilitada</b>
+                                <small>Datos proporcionados por INGEDATA S.A.C.</small>
+                            </div>
+                        </div>
+
+                        <div className="payment-action-card">
+                            <span className="action-icon">🏦</span>
+                            <div>
+                                <h4>Transferencia Interbank</h4>
+                                <p>
+                                    Usa el número de cuenta o CCI según el banco desde el que
+                                    realizarás la transferencia.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="payment-action-card detraction-card">
+                            <span className="action-icon">🧾</span>
+                            <div>
+                                <h4>Cuenta de detracción</h4>
+                                <p>
+                                    Para operaciones sujetas a detracción utiliza únicamente esta
+                                    cuenta cuando corresponda.
+                                </p>
+                                <div className="detraction-number-row">
+                                    <strong>{DATOS_BANCARIOS.cuentaDetraccion}</strong>
+                                    <button
+                                        type="button"
+                                        className="copy-mini copy-light"
+                                        onClick={() =>
+                                            copiarTexto(
+                                                DATOS_BANCARIOS.cuentaDetraccion,
+                                                "Cuenta de detracción"
+                                            )
+                                        }
+                                    >
+                                        📋 Copiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <a
+                            className="payment-whatsapp-btn"
+                            href={`https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(
+                                `Hola, ya realicé una transferencia a nombre de ${DATOS_BANCARIOS.titular} y deseo enviar mi constancia de pago.`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            💬 Enviar constancia por WhatsApp
+                        </a>
+
+                        <p className="payment-warning">
+                            🔒 Antes de transferir, verifica que el titular mostrado por tu banco
+                            corresponda a <b>{DATOS_BANCARIOS.titular}</b>.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="comprobante-section">
+                    <div className="section-head comprobante-head">
+                        <div className="ey">Comprobante de pago</div>
+                        <h2>
+                            Tramita tu <b>boleta o factura</b>
+                        </h2>
+                        <div className="uline"></div>
+                        <p>
+                            Elige el comprobante, completa tus datos y envía la solicitud por
+                            WhatsApp. Revisaremos la información antes de la emisión.
+                        </p>
+                    </div>
+
+                    <div className="receipt-steps">
+                        <div className="receipt-step active-step">
+                            <span>1</span>
+                            <div>
+                                <b>Elige</b>
+                                <small>Boleta o factura</small>
+                            </div>
+                        </div>
+                        <div className="receipt-step">
+                            <span>2</span>
+                            <div>
+                                <b>Completa</b>
+                                <small>Tus datos fiscales</small>
+                            </div>
+                        </div>
+                        <div className="receipt-step">
+                            <span>3</span>
+                            <div>
+                                <b>Solicita</b>
+                                <small>Envíalo por WhatsApp</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="receipt-type-grid">
+                        <button
+                            type="button"
+                            className={`receipt-type-card ${comprobante === "boleta" ? "active" : ""
+                                }`}
+                            onClick={() => setComprobante("boleta")}
+                        >
+                            <span className="receipt-type-icon">🧾</span>
+                            <span>
+                                <b>Boleta electrónica</b>
+                                <small>Para persona natural · requiere DNI</small>
+                            </span>
+                            <span className="receipt-check">
+                                {comprobante === "boleta" ? "✓" : "○"}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`receipt-type-card ${comprobante === "factura" ? "active" : ""
+                                }`}
+                            onClick={() => setComprobante("factura")}
+                        >
+                            <span className="receipt-type-icon">📄</span>
+                            <span>
+                                <b>Factura electrónica</b>
+                                <small>Para empresa o negocio · requiere RUC</small>
+                            </span>
+                            <span className="receipt-check">
+                                {comprobante === "factura" ? "✓" : "○"}
+                            </span>
+                        </button>
+                    </div>
+
+                    <div className="receipt-workspace">
+                        <div className="comprobante-form interactive-form">
+                            <div className="form-title-row">
+                                <div>
+                                    <span className="form-kicker">
+                                        {comprobante === "boleta"
+                                            ? "DATOS PARA BOLETA"
+                                            : "DATOS PARA FACTURA"}
+                                    </span>
+                                    <h3>
+                                        {comprobante === "boleta"
+                                            ? "Información del cliente"
+                                            : "Información de la empresa"}
+                                    </h3>
+                                </div>
+                                <span className="required-note">* Campos obligatorios</span>
+                            </div>
+
+                            {comprobante === "boleta" ? (
+                                <>
+                                    <div className="form-group">
+                                        <label htmlFor="comprobante-dni">
+                                            DNI <span>*</span>
+                                        </label>
+                                        <div className="input-with-icon">
+                                            <span>🪪</span>
+                                            <input
+                                                id="comprobante-dni"
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={8}
+                                                placeholder="8 dígitos"
+                                                value={datosComprobante.dni}
+                                                onChange={(e) =>
+                                                    actualizarDatoComprobante(
+                                                        "dni",
+                                                        e.target.value.replace(/\D/g, "")
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <small
+                                            className={
+                                                datosComprobante.dni.length === 8
+                                                    ? "field-ok"
+                                                    : "field-hint"
+                                            }
+                                        >
+                                            {datosComprobante.dni.length === 8
+                                                ? "✓ DNI con 8 dígitos"
+                                                : `${datosComprobante.dni.length}/8 dígitos`}
+                                        </small>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label htmlFor="comprobante-nombres">
+                                            Nombres y apellidos <span>*</span>
+                                        </label>
+                                        <div className="input-with-icon">
+                                            <span>👤</span>
+                                            <input
+                                                id="comprobante-nombres"
+                                                type="text"
+                                                placeholder="Nombre completo"
+                                                value={datosComprobante.nombres}
+                                                onChange={(e) =>
+                                                    actualizarDatoComprobante(
+                                                        "nombres",
+                                                        e.target.value
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="form-group">
+                                        <label htmlFor="comprobante-ruc">
+                                            RUC <span>*</span>
+                                        </label>
+                                        <div className="input-with-icon">
+                                            <span>🏢</span>
+                                            <input
+                                                id="comprobante-ruc"
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={11}
+                                                placeholder="11 dígitos"
+                                                value={datosComprobante.ruc}
+                                                onChange={(e) =>
+                                                    actualizarDatoComprobante(
+                                                        "ruc",
+                                                        e.target.value.replace(/\D/g, "")
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <small
+                                            className={
+                                                datosComprobante.ruc.length === 11
+                                                    ? "field-ok"
+                                                    : "field-hint"
+                                            }
+                                        >
+                                            {datosComprobante.ruc.length === 11
+                                                ? "✓ RUC con 11 dígitos"
+                                                : `${datosComprobante.ruc.length}/11 dígitos`}
+                                        </small>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label htmlFor="comprobante-razon">
+                                            Razón social <span>*</span>
+                                        </label>
+                                        <div className="input-with-icon">
+                                            <span>🏷️</span>
+                                            <input
+                                                id="comprobante-razon"
+                                                type="text"
+                                                placeholder="Razón social de la empresa"
+                                                value={datosComprobante.razonSocial}
+                                                onChange={(e) =>
+                                                    actualizarDatoComprobante(
+                                                        "razonSocial",
+                                                        e.target.value
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group form-group-full">
+                                        <label htmlFor="comprobante-direccion">
+                                            Dirección fiscal <span>*</span>
+                                        </label>
+                                        <div className="input-with-icon">
+                                            <span>📍</span>
+                                            <input
+                                                id="comprobante-direccion"
+                                                type="text"
+                                                placeholder="Dirección fiscal registrada"
+                                                value={datosComprobante.direccionFiscal}
+                                                onChange={(e) =>
+                                                    actualizarDatoComprobante(
+                                                        "direccionFiscal",
+                                                        e.target.value
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="form-group form-group-full">
+                                <label htmlFor="comprobante-correo">
+                                    Correo electrónico <span>*</span>
+                                </label>
+                                <div className="input-with-icon">
+                                    <span>✉️</span>
+                                    <input
+                                        id="comprobante-correo"
+                                        type="email"
+                                        placeholder={
+                                            comprobante === "boleta"
+                                                ? "correo@ejemplo.com"
+                                                : "facturacion@empresa.com"
+                                        }
+                                        value={datosComprobante.correo}
+                                        onChange={(e) =>
+                                            actualizarDatoComprobante(
+                                                "correo",
+                                                e.target.value
+                                            )
+                                        }
+                                    />
+                                </div>
+                                <small className="field-hint">
+                                    El comprobante será enviado al correo indicado.
+                                </small>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="btn-comprobante interactive-submit"
+                                onClick={solicitarComprobante}
+                            >
+                                <span>💬</span>
+                                <span>
+                                    Solicitar{" "}
+                                    {comprobante === "boleta"
+                                        ? "boleta electrónica"
+                                        : "factura electrónica"}
+                                </span>
+                                <span>→</span>
+                            </button>
+                        </div>
+
+                        <aside className="receipt-summary">
+                            <div className="receipt-summary-icon">
+                                {comprobante === "boleta" ? "🧾" : "📄"}
+                            </div>
+                            <span className="summary-kicker">RESUMEN</span>
+                            <h3>
+                                {comprobante === "boleta"
+                                    ? "Boleta electrónica"
+                                    : "Factura electrónica"}
+                            </h3>
+
+                            <div className="summary-list">
+                                {comprobante === "boleta" ? (
+                                    <>
+                                        <div>
+                                            <span>DNI</span>
+                                            <b>
+                                                {datosComprobante.dni || "Pendiente"}
+                                            </b>
+                                        </div>
+                                        <div>
+                                            <span>Cliente</span>
+                                            <b>
+                                                {datosComprobante.nombres ||
+                                                    "Pendiente"}
+                                            </b>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <span>RUC</span>
+                                            <b>
+                                                {datosComprobante.ruc || "Pendiente"}
+                                            </b>
+                                        </div>
+                                        <div>
+                                            <span>Razón social</span>
+                                            <b>
+                                                {datosComprobante.razonSocial ||
+                                                    "Pendiente"}
+                                            </b>
+                                        </div>
+                                    </>
+                                )}
+                                <div>
+                                    <span>Correo</span>
+                                    <b>{datosComprobante.correo || "Pendiente"}</b>
+                                </div>
+                            </div>
+
+                            <div className="summary-security">
+                                <span>✓</span>
+                                <p>
+                                    Tus datos se enviarán directamente al WhatsApp de
+                                    INGEDATA para su revisión.
+                                </p>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section className="contact section" id="contacto">
+            <div className="wrap">
+                <div className="cta-band">
+                    <div className="txt">
+                        <h3>¿Necesitas una cotización?</h3>
+                        <p>Comunícate con nosotros y recibe atención para tu proyecto.</p>
+                        <p>
+                            WhatsApp: {DATOS_EMPRESA.telefono1} /{" "}
+                            {DATOS_EMPRESA.telefono2}
+                        </p>
+                    </div>
+
+                    <a className="btn-white" href="#tienda">
+                        Armar solicitud →
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <div className="wrap fwrap">
+                <div>
                     <a href="#inicio" className="logo logo-completo" aria-label="INGEDATA - Inicio">
                         <span className="mark mark-completo">
                             <ImagenRecurso
@@ -2009,1217 +3047,272 @@ Por favor, confírmenme la emisión del comprobante.`;
                         </span>
                     </a>
 
-                    <nav className="mainnav">
-                        <a href="#inicio">Inicio</a>
-                        <a href="#nosotros">Nosotros</a>
-                        <a href="#servicios">Servicios</a>
-                        <a href="#tienda">Catálogo</a>
-                        <a href="#pagos">Pagos</a>
-                        <a href="#contacto">Contacto</a>
-                    </nav>
-
-                    <div className="actions">
-                        <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
-                            📋 Solicitud <span className="badge">{cantidadTotal}</span>
-                        </button>
-
-                        <a href="#tienda" className="btn-quote">
-                            Solicitar proforma →
-                        </a>
-                    </div>
-                </div>
-            </header>
-
-            <section className="hero" id="inicio">
-                <div className="bgimg">
-                    <ImagenRecurso
-                        imagenes={[
-                            img("catalogo empresarial.png"),
-                            img("servicios.png"),
-                            img("servicios2.png"),
-                        ]}
-                        alt="INGEDATA infraestructura tecnológica"
-                    />
+                    <p>
+                        Soluciones integrales en telecomunicaciones, energía, tecnología e
+                        infraestructura.
+                    </p>
                 </div>
 
-                <div className="wrap">
-                    <div>
-                        <span className="eyebrow">Soluciones Integrales</span>
-
-                        <h1>
-                            Soluciones integrales en <em>telecomunicaciones, energía</em> e
-                            infraestructura tecnológica
-                        </h1>
-
-                        <p>
-                            Brindamos servicios de alta calidad en redes de datos, fibra óptica,
-                            sistemas eléctricos, seguridad electrónica, climatización y más.
-                            Soluciones confiables para impulsar tu negocio.
-                        </p>
-
-                        <div className="btns">
-                            <a href="#tienda" className="btn-primary">
-                                Seleccionar productos →
-                            </a>
-
-                            <a href="#servicios" className="btn-ghost">
-                                Ver servicios ▸
-                            </a>
-                        </div>
-                    </div>
+                <div>
+                    <h4>Menú</h4>
+                    <ul>
+                        <li>
+                            <a href="#nosotros">Nosotros</a>
+                        </li>
+                        <li>
+                            <a href="#servicios">Servicios</a>
+                        </li>
+                        <li>
+                            <a href="#tienda">Catálogo</a>
+                        </li>
+                        <li>
+                            <a href="#pagos">Pagos</a>
+                        </li>
+                    </ul>
                 </div>
-            </section>
 
-            <div className="statstrip">
-                <div className="wrap">
-                    <div className="bar">
-                        <div className="s">
-                            <div className="ic">📈</div>
-                            <div>
-                                <div className="num">+50</div>
-                                <small>Proyectos ejecutados</small>
-                            </div>
-                        </div>
+                <div className="fcontact">
+                    <h4>Contacto</h4>
+                    <p>
+                        📞 {DATOS_EMPRESA.telefono1} / {DATOS_EMPRESA.telefono2}
+                    </p>
+                    <p>✉️ {DATOS_EMPRESA.correo}</p>
+                    <p>🧾 RUC {DATOS_EMPRESA.ruc}</p>
+                </div>
 
-                        <div className="s">
-                            <div className="ic">🌎</div>
-                            <div>
-                                <div className="num">Cobertura</div>
-                                <small>Nacional · todo el Perú</small>
-                            </div>
-                        </div>
-
-                        <div className="s">
-                            <div className="ic">🏅</div>
-                            <div>
-                                <div className="num">Equipos</div>
-                                <small>Certificados FLUKE</small>
-                            </div>
-                        </div>
-
-                        <div className="s">
-                            <div className="ic">🏢</div>
-                            <div>
-                                <div className="num">Atención</div>
-                                <small>Corporativa e industrial</small>
-                            </div>
-                        </div>
-                    </div>
+                <div>
+                    <h4>Atención</h4>
+                    <p>Lunes a sábado</p>
+                    <p>8:00 a.m. - 6:00 p.m.</p>
                 </div>
             </div>
 
-            <section className="about section" id="nosotros">
-                <div className="wrap">
-                    <div className="grid2">
-                        <div className="photo">
+            <div className="wrap copyr">
+                <span>© 2026 INGEDATA S.A.C. Todos los derechos reservados.</span>
+                <span>Portal empresarial y catálogo de soluciones.</span>
+            </div>
+        </footer>
+
+        <button
+            className="fab"
+            onClick={() => window.open(whatsappGeneral, "_blank")}
+        >
+            💬
+        </button>
+
+        <div
+            className={`overlay ${carritoAbierto ? "show" : ""}`}
+            onClick={() => setCarritoAbierto(false)}
+        ></div>
+
+        <aside className={`drawer ${carritoAbierto ? "show" : ""}`}>
+            <div className="dh">
+                <h3>📋 Solicitud de proforma</h3>
+
+                <button className="close" onClick={() => setCarritoAbierto(false)}>
+                    ×
+                </button>
+            </div>
+
+            <div className="items">
+                {itemsCarrito.length === 0 ? (
+                    <div className="empty">
+                        <span className="e">📋</span>
+                        <p>Aún no has seleccionado productos.</p>
+                        <button onClick={() => setCarritoAbierto(false)}>
+                            Ver catálogo
+                        </button>
+                    </div>
+                ) : (
+                    itemsCarrito.map((item) => (
+                        <div className="ci" key={item.id}>
                             <ImagenRecurso
-                                imagenes={[
-                                    img("servicios.png"),
-                                    img("servicios2.png"),
-                                    img("catalogo empresarial.png"),
-                                ]}
-                                alt="Equipo técnico INGEDATA"
+                                imagenes={obtenerImagenesProducto(item)}
+                                alt={item.nombre}
                             />
-                        </div>
 
+                            <div className="info">
+                                <h4>{item.nombre}</h4>
+                                <div className="p">Cantidad solicitada</div>
+
+                                <div className="qty">
+                                    <button onClick={() => cambiarCantidad(item.id, -1)}>
+                                        -
+                                    </button>
+
+                                    <span>{item.cantidad}</span>
+
+                                    <button onClick={() => cambiarCantidad(item.id, 1)}>
+                                        +
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button
+                                className="rm"
+                                onClick={() => quitar(item.id)}
+                                title="Quitar de la solicitud"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <div className="foot">
+                <div className="row total">
+                    <span>Productos seleccionados</span>
+                    <b>{cantidadTotal}</b>
+                </div>
+
+                <p
+                    style={{
+                        margin: "12px 0",
+                        fontSize: "0.85rem",
+                        lineHeight: 1.5,
+                        color: "#64748b",
+                    }}
+                >
+                    INGEDATA preparará una proforma personalizada con precios,
+                    disponibilidad y condiciones comerciales.
+                </p>
+
+                {itemsCarrito.length > 0 ? (
+                    <button
+                        className="checkout"
+                        type="button"
+                        onClick={abrirFormularioProforma}
+                    >
+                        Solicitar proforma
+                    </button>
+                ) : (
+                    <button
+                        className="checkout"
+                        type="button"
+                        onClick={() => setCarritoAbierto(false)}
+                    >
+                        Seleccionar productos
+                    </button>
+                )}
+            </div>
+        </aside>
+
+        {proformaAbierta && (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 100000,
+                    background: "rgba(4,16,34,.72)",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 20,
+                }}
+                onClick={() => !proformaEnviando && setProformaAbierta(false)}
+            >
+                <form
+                    onSubmit={enviarSolicitudProforma}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                        width: "min(760px, 100%)",
+                        maxHeight: "92vh",
+                        overflowY: "auto",
+                        background: "#fff",
+                        borderRadius: 22,
+                        boxShadow: "0 28px 80px rgba(0,0,0,.35)",
+                    }}
+                >
+                    <div style={{ padding: "20px 22px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
                         <div>
-                            <div className="ey">¿Quiénes somos?</div>
-                            <h3>INGEDATA S.A.C.</h3>
+                            <small style={{ color: "#64748b", fontWeight: 900 }}>SOLICITUD WEB</small>
+                            <h2 style={{ margin: "4px 0 0" }}>Solicitar proforma</h2>
+                        </div>
+                        <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", cursor: "pointer", fontSize: 20 }}>×</button>
+                    </div>
 
-                            <p>
-                                Empresa peruana especializada en soluciones integrales de
-                                infraestructura tecnológica, telecomunicaciones y sistemas
-                                eléctricos.
-                            </p>
-
-                            <p>
-                                Atendemos a empresas corporativas, campamentos mineros, plantas
-                                industriales, instituciones y organizaciones de diversos sectores,
-                                brindando soluciones confiables, seguras y eficientes.
-                            </p>
-
-                            <div className="pills">
-                                <div className="pill">
-                                    <span className="pic">🎓</span>
-                                    <div>
-                                        <b>Experiencia</b>
-                                        <small>Profesionales capacitados</small>
-                                    </div>
-                                </div>
-
-                                <div className="pill">
-                                    <span className="pic">✅</span>
-                                    <div>
-                                        <b>Calidad</b>
-                                        <small>Cumplimiento de estándares</small>
-                                    </div>
-                                </div>
-
-                                <div className="pill">
-                                    <span className="pic">🛡️</span>
-                                    <div>
-                                        <b>Seguridad</b>
-                                        <small>Trabajos con altos estándares</small>
-                                    </div>
-                                </div>
-
-                                <div className="pill">
-                                    <span className="pic">🤝</span>
-                                    <div>
-                                        <b>Compromiso</b>
-                                        <small>Con nuestros clientes</small>
-                                    </div>
-                                </div>
+                    <div style={{ padding: 22 }}>
+                        {proformaMensaje.toLowerCase().includes("registrada correctamente") ? (
+                            <div style={{ padding: 24, textAlign: "center", background: "#ecfdf5", border: "1px solid #bbf7d0", borderRadius: 16 }}>
+                                <div style={{ fontSize: 42, marginBottom: 8 }}>✓</div>
+                                <h3 style={{ margin: "0 0 8px", color: "#166534" }}>Solicitud enviada</h3>
+                                <p style={{ margin: "0 0 18px", color: "#166534" }}>{proformaMensaje}</p>
+                                <button type="button" className="checkout" onClick={() => setProformaAbierta(false)}>Cerrar</button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-            <section className="services section" id="servicios">
-                <div className="wrap">
-                    <div className="section-head">
-                        <div className="ey">Servicios técnicos</div>
-                        <h2>
-                            Principales <b>servicios</b>
-                        </h2>
-                        <div className="uline"></div>
-                        <p>
-                            Ejecutamos proyectos de redes, electricidad, fibra óptica, energía,
-                            CCTV y soporte técnico.
-                        </p>
-                    </div>
-
-                    <div className="sv-grid">
-                        <div className="sv-card">
-                            <div className="ic">🌐</div>
-                            <h4>Cableado estructurado</h4>
-                            <p>
-                                Instalación de puntos de red, patch panel, gabinete, face plate
-                                y certificación.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">💡</div>
-                            <h4>Fibra óptica</h4>
-                            <p>
-                                Instalación, empalme, medición y certificación de enlaces de
-                                fibra óptica.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">⚡</div>
-                            <h4>Sistemas eléctricos</h4>
-                            <p>
-                                Cableado eléctrico, tableros, tomacorrientes, tuberías EMT e
-                                IMC.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">🔋</div>
-                            <h4>UPS y energía</h4>
-                            <p>
-                                Instalación y mantenimiento de UPS, transformadores y grupos
-                                electrógenos.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">🌍</div>
-                            <h4>Pozo a tierra</h4>
-                            <p>
-                                Implementación, mantenimiento y medición de sistemas de puesta a
-                                tierra.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">📹</div>
-                            <h4>CCTV</h4>
-                            <p>
-                                Instalación y configuración de cámaras de vigilancia para
-                                empresas.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">❄️</div>
-                            <h4>Climatización</h4>
-                            <p>
-                                Instalación de equipos de aire acondicionado y soporte operativo.
-                            </p>
-                        </div>
-
-                        <div className="sv-card">
-                            <div className="ic">🪑</div>
-                            <h4>Mobiliario</h4>
-                            <p>
-                                Fabricación e instalación de mobiliario en melamina para
-                                oficinas.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="shop section" id="tienda">
-                <div className="wrap">
-                    <div className="section-head">
-                        <div className="ey">Catálogo empresarial</div>
-                        <h2>
-                            Productos y <b>Servicios</b>
-                        </h2>
-                        <div className="uline"></div>
-                        <p>
-                            Selecciona los productos o servicios que necesitas. Los precios se
-                            cotizan mediante una proforma personalizada de INGEDATA S.A.C.
-                        </p>
-                    </div>
-
-                    <div className="shop-top">
-                        <div className="search">
-                            <span className="mag">🔎</span>
-                            <input
-                                value={buscar}
-                                onChange={(e) => setBuscar(e.target.value)}
-                                placeholder="Buscar cable, UPS, jack, fibra, servicio..."
-                            />
-                        </div>
-
-                        <select value={orden} onChange={(e) => setOrden(e.target.value)}>
-                            <option value="default">Ordenar</option>
-                            <option value="az">Nombre A-Z</option>
-                        </select>
-                    </div>
-
-                    <div className="filters">
-                        {categorias.map((cat) => (
-                            <button
-                                key={cat.value}
-                                className={categoria === cat.value ? "active" : ""}
-                                onClick={() => setCategoria(cat.value)}
-                            >
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="count">
-                        {cargandoProductos
-                            ? "Cargando productos..."
-                            : `${lista.length} producto${lista.length !== 1 ? "s" : ""}`}
-                    </div>
-
-                    {cargandoProductos ? (
-                        <div className="loading-products">
-                            Cargando productos desde la base de datos...
-                        </div>
-                    ) : errorProductos ? (
-                        <div className="loading-products error-products">
-                            {errorProductos}
-                            <br />
-                            No se pudo conectar con el catálogo en línea. Intenta nuevamente en unos segundos.
-                        </div>
-                    ) : (
-                        <div className="grid">
-                            {lista.map((p) => {
-                                return (
-                                    <article className="card in" key={p.id}>
-                                        <div className="media">
-                                            <ImagenRecurso imagenes={obtenerImagenesProducto(p)} alt={p.nombre} />
-
-                                            <div className="chips">
-                                                {p.tag && (
-                                                    <span
-                                                        className={`chip ${p.tag === "Servicio" ||
-                                                            p.tag === "Cotizar"
-                                                            ? "svc"
-                                                            : p.tag === "Kit"
-                                                                ? "green"
-                                                                : "gold"
-                                                            }`}
-                                                    >
-                                                        {p.tag}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <button
-                                                className={`fav ${favoritos[p.id] ? "on" : ""}`}
-                                                onClick={() => toggleFavorito(p.id)}
-                                            >
-                                                {favoritos[p.id] ? "♥" : "♡"}
-                                            </button>
-
-                                            <button
-                                                className="quick"
-                                                onClick={() => agregar(p.id)}
-                                            >
-                                                Agregar a solicitud
-                                            </button>
-                                        </div>
-
-                                        <div className="body">
-                                            <span className="brand">{p.brand}</span>
-                                            <h3>{p.nombre}</h3>
-
-                                            <div className="rate">
-                                                <span className="stars">★★★★★</span>{" "}
-                                                {Number(p.rate || 0).toFixed(1)}{" "}
-                                                <span>({p.rev || 0})</span>
-                                            </div>
-
-                                            <div className="priceRow">
-                                                <span className="price quote-price">
-                                                    Precio a cotizar
-                                                </span>
-
-                                                <button
-                                                    className="add"
-                                                    onClick={() => agregar(p.id)}
-                                                    title="Agregar a solicitud"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </section>
-
-            <section className="why section">
-                <div className="wrap">
-                    <div className="section-head">
-                        <div className="ey">Por qué elegirnos</div>
-                        <h2>Calidad, seguridad y confianza</h2>
-                        <div className="uline"></div>
-                        <p>
-                            Trabajamos con enfoque técnico, cumplimiento, orden y compromiso
-                            con cada cliente.
-                        </p>
-                    </div>
-
-                    <div className="why-grid">
-                        <div className="why-card">
-                            <div className="ic">🛡️</div>
-                            <b>Seguridad</b>
-                            <small>Procedimientos seguros y responsables.</small>
-                        </div>
-
-                        <div className="why-card">
-                            <div className="ic">✅</div>
-                            <b>Calidad</b>
-                            <small>Soluciones alineadas a estándares técnicos.</small>
-                        </div>
-
-                        <div className="why-card">
-                            <div className="ic">⚙️</div>
-                            <b>Equipamiento</b>
-                            <small>Herramientas para diagnóstico y certificación.</small>
-                        </div>
-
-                        <div className="why-card">
-                            <div className="ic">🤝</div>
-                            <b>Confianza</b>
-                            <small>Atención cercana y profesional.</small>
-                        </div>
-
-                        <div className="why-card">
-                            <div className="ic">🚀</div>
-                            <b>Innovación</b>
-                            <small>Soluciones tecnológicas eficientes.</small>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="payments section" id="pagos">
-                <div className="wrap">
-                    <div className="section-head payment-main-head">
-                        <div className="ey">Método de pago</div>
-                        <h2>
-                            Transferencia <b>bancaria segura</b>
-                        </h2>
-                        <div className="uline"></div>
-                        <p>
-                            Realiza tu pago directamente a la cuenta empresarial de INGEDATA S.A.C.
-                            Verifica los datos antes de transferir y conserva tu constancia de pago.
-                        </p>
-                    </div>
-
-                    <div className="bank-payment-layout">
-                        <div className="bank-card-interactive">
-                            <div className="bank-card-top">
-                                <div>
-                                    <span className="bank-label">BANCO</span>
-                                    <h3>{DATOS_BANCARIOS.banco}</h3>
-                                </div>
-                                <div className="bank-currency">
-                                    <span>S/</span>
-                                    <small>{DATOS_BANCARIOS.moneda}</small>
-                                </div>
-                            </div>
-
-                            <div className="bank-owner">
-                                <span>Titular</span>
-                                <strong>{DATOS_BANCARIOS.titular}</strong>
-                                <small>RUC {DATOS_EMPRESA.ruc}</small>
-                            </div>
-
-                            <div className="bank-number-block">
-                                <div className="bank-number-heading">
-                                    <span>Número de cuenta</span>
-                                    <button
-                                        type="button"
-                                        className="copy-mini"
-                                        onClick={() =>
-                                            copiarTexto(
-                                                DATOS_BANCARIOS.numeroCuenta,
-                                                "Número de cuenta"
-                                            )
-                                        }
-                                    >
-                                        📋 Copiar
-                                    </button>
-                                </div>
-                                <strong className="bank-number">
-                                    {DATOS_BANCARIOS.numeroCuenta}
-                                </strong>
-                            </div>
-
-                            <div className="bank-number-block cci-block">
-                                <div className="bank-number-heading">
-                                    <span>CCI</span>
-                                    <button
-                                        type="button"
-                                        className="copy-mini"
-                                        onClick={() =>
-                                            copiarTexto(DATOS_BANCARIOS.cci, "CCI")
-                                        }
-                                    >
-                                        📋 Copiar
-                                    </button>
-                                </div>
-                                <strong className="bank-number bank-number-small">
-                                    {DATOS_BANCARIOS.cci}
-                                </strong>
-                            </div>
-
-                            <div className="bank-meta">
-                                <div>
-                                    <span>Tipo de cuenta</span>
-                                    <b>{DATOS_BANCARIOS.tipoCuenta}</b>
-                                </div>
-                                <div>
-                                    <span>Moneda</span>
-                                    <b>{DATOS_BANCARIOS.moneda}</b>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="payment-actions-panel">
-                            <div className="payment-status">
-                                <span className="status-dot"></span>
-                                <div>
-                                    <b>Cuenta empresarial habilitada</b>
-                                    <small>Datos proporcionados por INGEDATA S.A.C.</small>
-                                </div>
-                            </div>
-
-                            <div className="payment-action-card">
-                                <span className="action-icon">🏦</span>
-                                <div>
-                                    <h4>Transferencia Interbank</h4>
-                                    <p>
-                                        Usa el número de cuenta o CCI según el banco desde el que
-                                        realizarás la transferencia.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="payment-action-card detraction-card">
-                                <span className="action-icon">🧾</span>
-                                <div>
-                                    <h4>Cuenta de detracción</h4>
-                                    <p>
-                                        Para operaciones sujetas a detracción utiliza únicamente esta
-                                        cuenta cuando corresponda.
-                                    </p>
-                                    <div className="detraction-number-row">
-                                        <strong>{DATOS_BANCARIOS.cuentaDetraccion}</strong>
+                        ) : (
+                            <>
+                                <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                                    {["PERSONA", "EMPRESA"].map((tipo) => (
                                         <button
+                                            key={tipo}
                                             type="button"
-                                            className="copy-mini copy-light"
-                                            onClick={() =>
-                                                copiarTexto(
-                                                    DATOS_BANCARIOS.cuentaDetraccion,
-                                                    "Cuenta de detracción"
-                                                )
-                                            }
+                                            onClick={() => actualizarDatoProforma("tipo_cliente", tipo)}
+                                            style={{
+                                                flex: 1,
+                                                border: proformaDatos.tipo_cliente === tipo ? "2px solid #1473e6" : "1px solid #cbd5e1",
+                                                background: proformaDatos.tipo_cliente === tipo ? "#eff6ff" : "#fff",
+                                                color: "#0f2d55",
+                                                padding: 12,
+                                                borderRadius: 12,
+                                                fontWeight: 900,
+                                                cursor: "pointer",
+                                            }}
                                         >
-                                            📋 Copiar
+                                            {tipo === "PERSONA" ? "Persona natural" : "Empresa"}
                                         </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <a
-                                className="payment-whatsapp-btn"
-                                href={`https://wa.me/${WHATSAPP_1}?text=${encodeURIComponent(
-                                    `Hola, ya realicé una transferencia a nombre de ${DATOS_BANCARIOS.titular} y deseo enviar mi constancia de pago.`
-                                )}`}
-                                target="_blank"
-                                rel="noreferrer"
-                            >
-                                💬 Enviar constancia por WhatsApp
-                            </a>
-
-                            <p className="payment-warning">
-                                🔒 Antes de transferir, verifica que el titular mostrado por tu banco
-                                corresponda a <b>{DATOS_BANCARIOS.titular}</b>.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="comprobante-section">
-                        <div className="section-head comprobante-head">
-                            <div className="ey">Comprobante de pago</div>
-                            <h2>
-                                Tramita tu <b>boleta o factura</b>
-                            </h2>
-                            <div className="uline"></div>
-                            <p>
-                                Elige el comprobante, completa tus datos y envía la solicitud por
-                                WhatsApp. Revisaremos la información antes de la emisión.
-                            </p>
-                        </div>
-
-                        <div className="receipt-steps">
-                            <div className="receipt-step active-step">
-                                <span>1</span>
-                                <div>
-                                    <b>Elige</b>
-                                    <small>Boleta o factura</small>
-                                </div>
-                            </div>
-                            <div className="receipt-step">
-                                <span>2</span>
-                                <div>
-                                    <b>Completa</b>
-                                    <small>Tus datos fiscales</small>
-                                </div>
-                            </div>
-                            <div className="receipt-step">
-                                <span>3</span>
-                                <div>
-                                    <b>Solicita</b>
-                                    <small>Envíalo por WhatsApp</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="receipt-type-grid">
-                            <button
-                                type="button"
-                                className={`receipt-type-card ${comprobante === "boleta" ? "active" : ""
-                                    }`}
-                                onClick={() => setComprobante("boleta")}
-                            >
-                                <span className="receipt-type-icon">🧾</span>
-                                <span>
-                                    <b>Boleta electrónica</b>
-                                    <small>Para persona natural · requiere DNI</small>
-                                </span>
-                                <span className="receipt-check">
-                                    {comprobante === "boleta" ? "✓" : "○"}
-                                </span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className={`receipt-type-card ${comprobante === "factura" ? "active" : ""
-                                    }`}
-                                onClick={() => setComprobante("factura")}
-                            >
-                                <span className="receipt-type-icon">📄</span>
-                                <span>
-                                    <b>Factura electrónica</b>
-                                    <small>Para empresa o negocio · requiere RUC</small>
-                                </span>
-                                <span className="receipt-check">
-                                    {comprobante === "factura" ? "✓" : "○"}
-                                </span>
-                            </button>
-                        </div>
-
-                        <div className="receipt-workspace">
-                            <div className="comprobante-form interactive-form">
-                                <div className="form-title-row">
-                                    <div>
-                                        <span className="form-kicker">
-                                            {comprobante === "boleta"
-                                                ? "DATOS PARA BOLETA"
-                                                : "DATOS PARA FACTURA"}
-                                        </span>
-                                        <h3>
-                                            {comprobante === "boleta"
-                                                ? "Información del cliente"
-                                                : "Información de la empresa"}
-                                        </h3>
-                                    </div>
-                                    <span className="required-note">* Campos obligatorios</span>
+                                    ))}
                                 </div>
 
-                                {comprobante === "boleta" ? (
-                                    <>
-                                        <div className="form-group">
-                                            <label htmlFor="comprobante-dni">
-                                                DNI <span>*</span>
-                                            </label>
-                                            <div className="input-with-icon">
-                                                <span>🪪</span>
-                                                <input
-                                                    id="comprobante-dni"
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    maxLength={8}
-                                                    placeholder="8 dígitos"
-                                                    value={datosComprobante.dni}
-                                                    onChange={(e) =>
-                                                        actualizarDatoComprobante(
-                                                            "dni",
-                                                            e.target.value.replace(/\D/g, "")
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                            <small
-                                                className={
-                                                    datosComprobante.dni.length === 8
-                                                        ? "field-ok"
-                                                        : "field-hint"
-                                                }
-                                            >
-                                                {datosComprobante.dni.length === 8
-                                                    ? "✓ DNI con 8 dígitos"
-                                                    : `${datosComprobante.dni.length}/8 dígitos`}
-                                            </small>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label htmlFor="comprobante-nombres">
-                                                Nombres y apellidos <span>*</span>
-                                            </label>
-                                            <div className="input-with-icon">
-                                                <span>👤</span>
-                                                <input
-                                                    id="comprobante-nombres"
-                                                    type="text"
-                                                    placeholder="Nombre completo"
-                                                    value={datosComprobante.nombres}
-                                                    onChange={(e) =>
-                                                        actualizarDatoComprobante(
-                                                            "nombres",
-                                                            e.target.value
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="form-group">
-                                            <label htmlFor="comprobante-ruc">
-                                                RUC <span>*</span>
-                                            </label>
-                                            <div className="input-with-icon">
-                                                <span>🏢</span>
-                                                <input
-                                                    id="comprobante-ruc"
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    maxLength={11}
-                                                    placeholder="11 dígitos"
-                                                    value={datosComprobante.ruc}
-                                                    onChange={(e) =>
-                                                        actualizarDatoComprobante(
-                                                            "ruc",
-                                                            e.target.value.replace(/\D/g, "")
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                            <small
-                                                className={
-                                                    datosComprobante.ruc.length === 11
-                                                        ? "field-ok"
-                                                        : "field-hint"
-                                                }
-                                            >
-                                                {datosComprobante.ruc.length === 11
-                                                    ? "✓ RUC con 11 dígitos"
-                                                    : `${datosComprobante.ruc.length}/11 dígitos`}
-                                            </small>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label htmlFor="comprobante-razon">
-                                                Razón social <span>*</span>
-                                            </label>
-                                            <div className="input-with-icon">
-                                                <span>🏷️</span>
-                                                <input
-                                                    id="comprobante-razon"
-                                                    type="text"
-                                                    placeholder="Razón social de la empresa"
-                                                    value={datosComprobante.razonSocial}
-                                                    onChange={(e) =>
-                                                        actualizarDatoComprobante(
-                                                            "razonSocial",
-                                                            e.target.value
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="form-group form-group-full">
-                                            <label htmlFor="comprobante-direccion">
-                                                Dirección fiscal <span>*</span>
-                                            </label>
-                                            <div className="input-with-icon">
-                                                <span>📍</span>
-                                                <input
-                                                    id="comprobante-direccion"
-                                                    type="text"
-                                                    placeholder="Dirección fiscal registrada"
-                                                    value={datosComprobante.direccionFiscal}
-                                                    onChange={(e) =>
-                                                        actualizarDatoComprobante(
-                                                            "direccionFiscal",
-                                                            e.target.value
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                <div className="form-group form-group-full">
-                                    <label htmlFor="comprobante-correo">
-                                        Correo electrónico <span>*</span>
-                                    </label>
-                                    <div className="input-with-icon">
-                                        <span>✉️</span>
-                                        <input
-                                            id="comprobante-correo"
-                                            type="email"
-                                            placeholder={
-                                                comprobante === "boleta"
-                                                    ? "correo@ejemplo.com"
-                                                    : "facturacion@empresa.com"
-                                            }
-                                            value={datosComprobante.correo}
-                                            onChange={(e) =>
-                                                actualizarDatoComprobante(
-                                                    "correo",
-                                                    e.target.value
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    <small className="field-hint">
-                                        El comprobante será enviado al correo indicado.
-                                    </small>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    className="btn-comprobante interactive-submit"
-                                    onClick={solicitarComprobante}
-                                >
-                                    <span>💬</span>
-                                    <span>
-                                        Solicitar{" "}
-                                        {comprobante === "boleta"
-                                            ? "boleta electrónica"
-                                            : "factura electrónica"}
-                                    </span>
-                                    <span>→</span>
-                                </button>
-                            </div>
-
-                            <aside className="receipt-summary">
-                                <div className="receipt-summary-icon">
-                                    {comprobante === "boleta" ? "🧾" : "📄"}
-                                </div>
-                                <span className="summary-kicker">RESUMEN</span>
-                                <h3>
-                                    {comprobante === "boleta"
-                                        ? "Boleta electrónica"
-                                        : "Factura electrónica"}
-                                </h3>
-
-                                <div className="summary-list">
-                                    {comprobante === "boleta" ? (
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+                                    {proformaDatos.tipo_cliente === "PERSONA" ? (
                                         <>
-                                            <div>
-                                                <span>DNI</span>
-                                                <b>
-                                                    {datosComprobante.dni || "Pendiente"}
-                                                </b>
-                                            </div>
-                                            <div>
-                                                <span>Cliente</span>
-                                                <b>
-                                                    {datosComprobante.nombres ||
-                                                        "Pendiente"}
-                                                </b>
-                                            </div>
+                                            <input required placeholder="Nombres" value={proformaDatos.nombres} onChange={(e) => actualizarDatoProforma("nombres", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                            <input required placeholder="Apellidos" value={proformaDatos.apellidos} onChange={(e) => actualizarDatoProforma("apellidos", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                            <input required inputMode="numeric" maxLength={8} placeholder="DNI (8 dígitos)" value={proformaDatos.dni} onChange={(e) => actualizarDatoProforma("dni", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
                                         </>
                                     ) : (
                                         <>
-                                            <div>
-                                                <span>RUC</span>
-                                                <b>
-                                                    {datosComprobante.ruc || "Pendiente"}
-                                                </b>
-                                            </div>
-                                            <div>
-                                                <span>Razón social</span>
-                                                <b>
-                                                    {datosComprobante.razonSocial ||
-                                                        "Pendiente"}
-                                                </b>
-                                            </div>
+                                            <input required placeholder="Razón social" value={proformaDatos.razon_social} onChange={(e) => actualizarDatoProforma("razon_social", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                            <input required inputMode="numeric" maxLength={11} placeholder="RUC (11 dígitos)" value={proformaDatos.ruc} onChange={(e) => actualizarDatoProforma("ruc", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
                                         </>
                                     )}
-                                    <div>
-                                        <span>Correo</span>
-                                        <b>{datosComprobante.correo || "Pendiente"}</b>
+                                    <input required placeholder="Teléfono" value={proformaDatos.telefono} onChange={(e) => actualizarDatoProforma("telefono", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                    <input required type="email" placeholder="Correo electrónico" value={proformaDatos.correo} onChange={(e) => actualizarDatoProforma("correo", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
+                                    <input placeholder="Dirección" value={proformaDatos.direccion} onChange={(e) => actualizarDatoProforma("direccion", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, gridColumn: "1 / -1" }} />
+                                    <textarea placeholder="Observaciones (opcional)" value={proformaDatos.observaciones} onChange={(e) => actualizarDatoProforma("observaciones", e.target.value)} rows={3} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, resize: "vertical", gridColumn: "1 / -1" }} />
+                                </div>
+
+                                <div style={{ marginTop: 18, padding: 14, background: "#f8fafc", borderRadius: 12 }}>
+                                    <b>{cantidadTotal} producto{cantidadTotal !== 1 ? "s" : ""} en la solicitud</b>
+                                    <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
+                                        {itemsCarrito.map((item) => `${item.nombre} x${item.cantidad}`).join(" · ")}
                                     </div>
                                 </div>
 
-                                <div className="summary-security">
-                                    <span>✓</span>
-                                    <p>
-                                        Tus datos se enviarán directamente al WhatsApp de
-                                        INGEDATA para su revisión.
-                                    </p>
+                                {proformaMensaje && (
+                                    <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontWeight: 800 }}>
+                                        {proformaMensaje}
+                                    </div>
+                                )}
+
+                                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18, flexWrap: "wrap" }}>
+                                    <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 10, padding: "12px 16px", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>
+                                    <button type="submit" disabled={proformaEnviando} className="checkout" style={{ width: "auto", minWidth: 210, opacity: proformaEnviando ? .65 : 1 }}>
+                                        {proformaEnviando ? "Enviando..." : "Enviar solicitud de proforma"}
+                                    </button>
                                 </div>
-                            </aside>
-                        </div>
+                            </>
+                        )}
                     </div>
-                </div>
-            </section>
-
-            <section className="contact section" id="contacto">
-                <div className="wrap">
-                    <div className="cta-band">
-                        <div className="txt">
-                            <h3>¿Necesitas una cotización?</h3>
-                            <p>Comunícate con nosotros y recibe atención para tu proyecto.</p>
-                            <p>
-                                WhatsApp: {DATOS_EMPRESA.telefono1} /{" "}
-                                {DATOS_EMPRESA.telefono2}
-                            </p>
-                        </div>
-
-                        <a className="btn-white" href="#tienda">
-                            Armar solicitud →
-                        </a>
-                    </div>
-                </div>
-            </section>
-
-            <footer>
-                <div className="wrap fwrap">
-                    <div>
-                        <a href="#inicio" className="logo logo-completo" aria-label="INGEDATA - Inicio">
-                            <span className="mark mark-completo">
-                                <ImagenRecurso
-                                    imagenes={[
-                                        img("logo-ingedata-nuevo.jpeg"),
-                                    ]}
-                                    alt="INGEDATA - Tecnología, Infraestructura e Ingeniería"
-                                />
-                            </span>
-                        </a>
-
-                        <p>
-                            Soluciones integrales en telecomunicaciones, energía, tecnología e
-                            infraestructura.
-                        </p>
-                    </div>
-
-                    <div>
-                        <h4>Menú</h4>
-                        <ul>
-                            <li>
-                                <a href="#nosotros">Nosotros</a>
-                            </li>
-                            <li>
-                                <a href="#servicios">Servicios</a>
-                            </li>
-                            <li>
-                                <a href="#tienda">Catálogo</a>
-                            </li>
-                            <li>
-                                <a href="#pagos">Pagos</a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="fcontact">
-                        <h4>Contacto</h4>
-                        <p>
-                            📞 {DATOS_EMPRESA.telefono1} / {DATOS_EMPRESA.telefono2}
-                        </p>
-                        <p>✉️ {DATOS_EMPRESA.correo}</p>
-                        <p>🧾 RUC {DATOS_EMPRESA.ruc}</p>
-                    </div>
-
-                    <div>
-                        <h4>Atención</h4>
-                        <p>Lunes a sábado</p>
-                        <p>8:00 a.m. - 6:00 p.m.</p>
-                    </div>
-                </div>
-
-                <div className="wrap copyr">
-                    <span>© 2026 INGEDATA S.A.C. Todos los derechos reservados.</span>
-                    <span>Portal empresarial y catálogo de soluciones.</span>
-                </div>
-            </footer>
-
-            <button
-                className="fab"
-                onClick={() => window.open(whatsappGeneral, "_blank")}
-            >
-                💬
-            </button>
-
-            <div
-                className={`overlay ${carritoAbierto ? "show" : ""}`}
-                onClick={() => setCarritoAbierto(false)}
-            ></div>
-
-            <aside className={`drawer ${carritoAbierto ? "show" : ""}`}>
-                <div className="dh">
-                    <h3>📋 Solicitud de proforma</h3>
-
-                    <button className="close" onClick={() => setCarritoAbierto(false)}>
-                        ×
-                    </button>
-                </div>
-
-                <div className="items">
-                    {itemsCarrito.length === 0 ? (
-                        <div className="empty">
-                            <span className="e">📋</span>
-                            <p>Aún no has seleccionado productos.</p>
-                            <button onClick={() => setCarritoAbierto(false)}>
-                                Ver catálogo
-                            </button>
-                        </div>
-                    ) : (
-                        itemsCarrito.map((item) => (
-                            <div className="ci" key={item.id}>
-                                <ImagenRecurso
-                                    imagenes={obtenerImagenesProducto(item)}
-                                    alt={item.nombre}
-                                />
-
-                                <div className="info">
-                                    <h4>{item.nombre}</h4>
-                                    <div className="p">Cantidad solicitada</div>
-
-                                    <div className="qty">
-                                        <button onClick={() => cambiarCantidad(item.id, -1)}>
-                                            -
-                                        </button>
-
-                                        <span>{item.cantidad}</span>
-
-                                        <button onClick={() => cambiarCantidad(item.id, 1)}>
-                                            +
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button
-                                    className="rm"
-                                    onClick={() => quitar(item.id)}
-                                    title="Quitar de la solicitud"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        ))
-                    )}
-                </div>
-
-                <div className="foot">
-                    <div className="row total">
-                        <span>Productos seleccionados</span>
-                        <b>{cantidadTotal}</b>
-                    </div>
-
-                    <p
-                        style={{
-                            margin: "12px 0",
-                            fontSize: "0.85rem",
-                            lineHeight: 1.5,
-                            color: "#64748b",
-                        }}
-                    >
-                        INGEDATA preparará una proforma personalizada con precios,
-                        disponibilidad y condiciones comerciales.
-                    </p>
-
-                    {itemsCarrito.length > 0 ? (
-                        <button
-                            className="checkout"
-                            type="button"
-                            onClick={abrirFormularioProforma}
-                        >
-                            Solicitar proforma
-                        </button>
-                    ) : (
-                        <button
-                            className="checkout"
-                            type="button"
-                            onClick={() => setCarritoAbierto(false)}
-                        >
-                            Seleccionar productos
-                        </button>
-                    )}
-                </div>
-            </aside>
-
-            {proformaAbierta && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        zIndex: 100000,
-                        background: "rgba(4,16,34,.72)",
-                        display: "grid",
-                        placeItems: "center",
-                        padding: 20,
-                    }}
-                    onClick={() => !proformaEnviando && setProformaAbierta(false)}
-                >
-                    <form
-                        onSubmit={enviarSolicitudProforma}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            width: "min(760px, 100%)",
-                            maxHeight: "92vh",
-                            overflowY: "auto",
-                            background: "#fff",
-                            borderRadius: 22,
-                            boxShadow: "0 28px 80px rgba(0,0,0,.35)",
-                        }}
-                    >
-                        <div style={{ padding: "20px 22px", borderBottom: "1px solid #e7edf5", display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
-                            <div>
-                                <small style={{ color: "#64748b", fontWeight: 900 }}>SOLICITUD WEB</small>
-                                <h2 style={{ margin: "4px 0 0" }}>Solicitar proforma</h2>
-                            </div>
-                            <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: 0, background: "#eef2f7", width: 38, height: 38, borderRadius: "50%", cursor: "pointer", fontSize: 20 }}>×</button>
-                        </div>
-
-                        <div style={{ padding: 22 }}>
-                            {proformaMensaje.toLowerCase().includes("registrada correctamente") ? (
-                                <div style={{ padding: 24, textAlign: "center", background: "#ecfdf5", border: "1px solid #bbf7d0", borderRadius: 16 }}>
-                                    <div style={{ fontSize: 42, marginBottom: 8 }}>✓</div>
-                                    <h3 style={{ margin: "0 0 8px", color: "#166534" }}>Solicitud enviada</h3>
-                                    <p style={{ margin: "0 0 18px", color: "#166534" }}>{proformaMensaje}</p>
-                                    <button type="button" className="checkout" onClick={() => setProformaAbierta(false)}>Cerrar</button>
-                                </div>
-                            ) : (
-                                <>
-                                    <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-                                        {["PERSONA", "EMPRESA"].map((tipo) => (
-                                            <button
-                                                key={tipo}
-                                                type="button"
-                                                onClick={() => actualizarDatoProforma("tipo_cliente", tipo)}
-                                                style={{
-                                                    flex: 1,
-                                                    border: proformaDatos.tipo_cliente === tipo ? "2px solid #1473e6" : "1px solid #cbd5e1",
-                                                    background: proformaDatos.tipo_cliente === tipo ? "#eff6ff" : "#fff",
-                                                    color: "#0f2d55",
-                                                    padding: 12,
-                                                    borderRadius: 12,
-                                                    fontWeight: 900,
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                {tipo === "PERSONA" ? "Persona natural" : "Empresa"}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-                                        {proformaDatos.tipo_cliente === "PERSONA" ? (
-                                            <>
-                                                <input required placeholder="Nombres" value={proformaDatos.nombres} onChange={(e) => actualizarDatoProforma("nombres", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                                <input required placeholder="Apellidos" value={proformaDatos.apellidos} onChange={(e) => actualizarDatoProforma("apellidos", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                                <input required inputMode="numeric" maxLength={8} placeholder="DNI (8 dígitos)" value={proformaDatos.dni} onChange={(e) => actualizarDatoProforma("dni", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <input required placeholder="Razón social" value={proformaDatos.razon_social} onChange={(e) => actualizarDatoProforma("razon_social", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                                <input required inputMode="numeric" maxLength={11} placeholder="RUC (11 dígitos)" value={proformaDatos.ruc} onChange={(e) => actualizarDatoProforma("ruc", e.target.value.replace(/\D/g, ""))} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                            </>
-                                        )}
-                                        <input required placeholder="Teléfono" value={proformaDatos.telefono} onChange={(e) => actualizarDatoProforma("telefono", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                        <input required type="email" placeholder="Correo electrónico" value={proformaDatos.correo} onChange={(e) => actualizarDatoProforma("correo", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10 }} />
-                                        <input placeholder="Dirección" value={proformaDatos.direccion} onChange={(e) => actualizarDatoProforma("direccion", e.target.value)} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, gridColumn: "1 / -1" }} />
-                                        <textarea placeholder="Observaciones (opcional)" value={proformaDatos.observaciones} onChange={(e) => actualizarDatoProforma("observaciones", e.target.value)} rows={3} style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 10, resize: "vertical", gridColumn: "1 / -1" }} />
-                                    </div>
-
-                                    <div style={{ marginTop: 18, padding: 14, background: "#f8fafc", borderRadius: 12 }}>
-                                        <b>{cantidadTotal} producto{cantidadTotal !== 1 ? "s" : ""} en la solicitud</b>
-                                        <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
-                                            {itemsCarrito.map((item) => `${item.nombre} x${item.cantidad}`).join(" · ")}
-                                        </div>
-                                    </div>
-
-                                    {proformaMensaje && (
-                                        <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontWeight: 800 }}>
-                                            {proformaMensaje}
-                                        </div>
-                                    )}
-
-                                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18, flexWrap: "wrap" }}>
-                                        <button type="button" disabled={proformaEnviando} onClick={() => setProformaAbierta(false)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 10, padding: "12px 16px", fontWeight: 800, cursor: "pointer" }}>Cancelar</button>
-                                        <button type="submit" disabled={proformaEnviando} className="checkout" style={{ width: "auto", minWidth: 210, opacity: proformaEnviando ? .65 : 1 }}>
-                                            {proformaEnviando ? "Enviando..." : "Enviar solicitud de proforma"}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            <div className={`toast ${toast ? "show" : ""}`}>
-                <span className="tic">✓</span> {toast}
+                </form>
             </div>
-        </>
-    );
+        )}
+
+        <div className={`toast ${toast ? "show" : ""}`}>
+            <span className="tic">✓</span> {toast}
+        </div>
+    </>
+);
 
 }
 

@@ -1,5 +1,4 @@
 ﻿const express = require("express");
-const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
 const cors = require("cors");
 const { Pool } = require("pg");
@@ -4960,11 +4959,11 @@ function generarPdfCotizacion(cotizacion) {
 
 
 // =========================================================
-// ADMIN - ENVIAR COTIZACIÓN POR CORREO
+// ADMIN - DESCARGAR PROFORMA PDF
 // =========================================================
 
-app.post(
-    "/admin/cotizaciones/:id/enviar-correo",
+app.get(
+    "/admin/cotizaciones/:id/pdf",
     verificarAdmin,
     async (req, res) => {
         try {
@@ -4976,59 +4975,47 @@ app.post(
                 });
             }
 
-            // OBTENER COTIZACIÓN + CLIENTE
-            const resultadoCotizacion =
-                await pool.query(
-                    `
-                    SELECT
-                        c.id,
-                        c.codigo,
-                        c.estado,
-                        c.subtotal,
-                        c.igv,
-                        c.total,
-                        c.observaciones,
+            const resultadoCotizacion = await pool.query(
+                `
+                SELECT
+                    c.id,
+                    c.codigo,
+                    c.estado,
+                    c.subtotal,
+                    c.igv,
+                    c.total,
+                    c.observaciones,
 
-                        cl.tipo_cliente,
-                        cl.nombres,
-                        cl.apellidos,
-                        cl.dni,
-                        cl.razon_social,
-                        cl.ruc,
-                        cl.telefono,
-                        cl.correo,
-                        cl.direccion
+                    cl.tipo_cliente,
+                    cl.nombres,
+                    cl.apellidos,
+                    cl.dni,
+                    cl.razon_social,
+                    cl.ruc,
+                    cl.telefono,
+                    cl.correo,
+                    cl.direccion
 
-                    FROM cotizaciones c
+                FROM cotizaciones c
 
-                    INNER JOIN clientes cl
-                        ON cl.id = c.cliente_id
+                INNER JOIN clientes cl
+                    ON cl.id = c.cliente_id
 
-                    WHERE c.id = $1
+                WHERE c.id = $1
 
-                    LIMIT 1
-                    `,
-                    [id]
-                );
+                LIMIT 1
+                `,
+                [id]
+            );
 
-            if (
-                resultadoCotizacion.rowCount === 0
-            ) {
+            if (resultadoCotizacion.rowCount === 0) {
                 return res.status(404).json({
-                    error:
-                        "Cotización no encontrada",
+                    error: "Cotización no encontrada",
                 });
             }
 
             const cotizacion =
                 resultadoCotizacion.rows[0];
-
-            if (!cotizacion.correo) {
-                return res.status(400).json({
-                    error:
-                        "El cliente no tiene correo registrado",
-                });
-            }
 
             if (
                 cotizacion.subtotal === null ||
@@ -5041,175 +5028,71 @@ app.post(
                 });
             }
 
-            // OBTENER PRODUCTOS
-            const resultadoProductos =
-                await pool.query(
-                    `
-                    SELECT
-                        dc.id,
-                        dc.producto_id,
-                        p.nombre,
-                        p.marca,
-                        dc.cantidad,
-                        dc.precio_unitario,
-                        dc.subtotal
+            const resultadoProductos = await pool.query(
+                `
+                SELECT
+                    dc.id,
+                    dc.producto_id,
+                    p.nombre,
+                    p.marca,
+                    dc.cantidad,
+                    dc.precio_unitario,
+                    dc.subtotal
 
-                    FROM detalle_cotizacion dc
+                FROM detalle_cotizacion dc
 
-                    INNER JOIN productos p
-                        ON p.id = dc.producto_id
+                INNER JOIN productos p
+                    ON p.id = dc.producto_id
 
-                    WHERE dc.cotizacion_id = $1
+                WHERE dc.cotizacion_id = $1
 
-                    ORDER BY dc.id ASC
-                    `,
-                    [id]
-                );
+                ORDER BY dc.id ASC
+                `,
+                [id]
+            );
 
             const datosPdf = {
                 ...cotizacion,
-                productos:
-                    resultadoProductos.rows,
+                productos: resultadoProductos.rows,
             };
 
             const pdfBuffer =
-                await generarPdfCotizacion(
-                    datosPdf
-                );
+                await generarPdfCotizacion(datosPdf);
 
-            // CONFIGURACIÓN SMTP
-            const transporter =
-                nodemailer.createTransport({
-                    host: process.env.SMTP_HOST,
-                    port: Number(
-                        process.env.SMTP_PORT || 587
-                    ),
-                    secure:
-                        String(
-                            process.env.SMTP_SECURE
-                        ).toLowerCase() ===
-                        "true",
+            const nombreArchivo =
+                `Cotizacion-${cotizacion.codigo}.pdf`;
 
-                    auth: {
-                        user:
-                            process.env.SMTP_USER,
-                        pass:
-                            process.env.SMTP_PASS,
-                    },
-                });
+            res.setHeader(
+                "Content-Type",
+                "application/pdf"
+            );
 
-            const nombreCliente =
-                cotizacion.tipo_cliente ===
-                    "EMPRESA"
-                    ? cotizacion.razon_social
-                    : `${cotizacion.nombres || ""} ${cotizacion.apellidos || ""}`.trim();
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${nombreArchivo}"`
+            );
 
-            await transporter.sendMail({
-                from:
-                    process.env.SMTP_FROM ||
-                    process.env.SMTP_USER,
+            res.setHeader(
+                "Content-Length",
+                pdfBuffer.length
+            );
 
-                to: cotizacion.correo,
-
-                subject:
-                    `Cotización ${cotizacion.codigo} - INGEDATA S.A.C.`,
-
-                html: `
-                    <div style="
-                        font-family:Arial,sans-serif;
-                        max-width:650px;
-                        margin:auto;
-                        color:#1f2937;
-                    ">
-                        <h2 style="color:#0c4a8a;">
-                            INGEDATA S.A.C.
-                        </h2>
-
-                        <p>
-                            Estimado(a)
-                            <strong>${nombreCliente}</strong>,
-                        </p>
-
-                        <p>
-                            Gracias por solicitar una cotización
-                            mediante nuestra página web.
-                        </p>
-
-                        <p>
-                            Adjuntamos la proforma
-                            <strong>${cotizacion.codigo}</strong>
-                            con el detalle de los productos,
-                            cantidades y precios solicitados.
-                        </p>
-
-                        <div style="
-                            background:#f4f7fb;
-                            padding:18px;
-                            border-radius:10px;
-                            margin:20px 0;
-                        ">
-                            <strong>
-                                Total cotizado:
-                                S/ ${Number(
-                    cotizacion.total
-                ).toFixed(2)}
-                            </strong>
-                        </div>
-
-                        <p>
-                            La cotización tiene una vigencia
-                            de 7 días calendario.
-                        </p>
-
-                        <p>
-                            Si desea confirmar el pedido o
-                            realizar alguna consulta, puede
-                            responder directamente a este correo.
-                        </p>
-
-                        <br>
-
-                        <p>
-                            Atentamente,<br>
-                            <strong>INGEDATA S.A.C.</strong><br>
-                            Tecnología · Infraestructura · Ingeniería
-                        </p>
-                    </div>
-                `,
-
-                attachments: [
-                    {
-                        filename:
-                            `Cotizacion-${cotizacion.codigo}.pdf`,
-                        content: pdfBuffer,
-                        contentType:
-                            "application/pdf",
-                    },
-                ],
-            });
-
-            res.json({
-                mensaje:
-                    "Cotización enviada correctamente al correo del cliente",
-                correo: cotizacion.correo,
-                codigo: cotizacion.codigo,
-            });
+            res.send(pdfBuffer);
 
         } catch (error) {
             console.error(
-                "Error al enviar cotización:",
+                "Error al generar PDF de cotización:",
                 error
             );
 
             res.status(500).json({
                 error:
-                    "No se pudo enviar la cotización por correo",
+                    "No se pudo generar la proforma PDF",
                 detalle: error.message,
             });
         }
     }
-);
-// =========================================================
+);// =========================================================
 // INICIAR SERVIDOR
 // =========================================================
 
