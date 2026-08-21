@@ -1934,13 +1934,17 @@ Por favor, confírmenme la emisión del comprobante.`;
                                                     >
                                                         {adminGuardandoCotizacion
                                                             ? "Guardando..."
-                                                            : String(adminCotizacionSeleccionada.estado || "").toUpperCase() === "COTIZADA"
+                                                            : String(
+                                                                adminCotizacionSeleccionada.estado || ""
+                                                            ).toUpperCase() === "COTIZADA"
                                                                 ? "Guardar cambios"
                                                                 : "Guardar cotización"}
-                                                </button>
-                                                    {String(
-                                                        adminCotizacionSeleccionada.estado || ""
-                                                    ).toUpperCase() === "COTIZADA" && (
+                                                    </button>
+                                                )}
+
+                                            {String(
+                                                adminCotizacionSeleccionada.estado || ""
+                                            ).toUpperCase() === "COTIZADA" && (
                                                     <button
                                                         type="button"
                                                         onClick={enviarCotizacionCorreoAdmin}
